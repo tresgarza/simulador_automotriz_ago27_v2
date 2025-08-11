@@ -1,36 +1,297 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Simulador de Crédito Automotriz - Financiera Incentiva
 
-## Getting Started
+Un simulador web profesional para cotizar créditos automotrices con cálculos precisos, interfaz moderna y funcionalidades completas.
 
-First, run the development server:
+## 🚀 Características
+
+- **Motor de Cálculo Preciso**: Implementa saldos insolutos, prorrateo por días y reglas de negocio exactas del PRD
+- **Comparador A/B/C**: Visualiza diferentes niveles de tasas (36%, 40%, 45%) lado a lado
+- **GPS Mensual**: Incluye renta mensual de GPS en los cálculos con IVA
+- **Exportaciones**: PDF de carátula, XLSX de tabla de amortización, JSON para CRM
+- **UI Profesional**: Diseño responsive con branding de Financiera Incentiva
+- **Validaciones Inteligentes**: Enganche mínimo 30% con autocorrección
+- **Tests Completos**: Suite de pruebas unitarias para el motor de cálculo
+
+## 🛠️ Stack Tecnológico
+
+- **Frontend**: Next.js 15 + React 19 + TypeScript
+- **Styling**: Tailwind CSS + Componentes customizados
+- **Formularios**: React Hook Form + Zod validation
+- **PDF**: @react-pdf/renderer
+- **Exportación**: XLSX (SheetJS)
+- **Tests**: Vitest
+- **Dev**: ESLint + Prettier
+
+## 🚀 Inicio Rápido
+
+### Prerrequisitos
+
+- Node.js 18+ 
+- npm o pnpm
+
+### Instalación
 
 ```bash
+# Clonar el proyecto
+cd simulador
+
+# Instalar dependencias
+npm install
+
+# Ejecutar en desarrollo (puerto 4321)
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+
+# Abrir en el navegador
+open http://localhost:4321
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+### Scripts Disponibles
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```bash
+npm run dev        # Servidor de desarrollo (puerto 4321)
+npm run build      # Build de producción
+npm run start      # Servidor de producción (puerto 4321)
+npm run lint       # Lint con ESLint
+npm test           # Tests unitarios con Vitest
+npm run test:ui    # Tests con interfaz web
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## 📋 Casos de Uso
 
-## Learn More
+### Cliente Final
+1. Ingresa valor del vehículo, enganche y plazo
+2. Selecciona seguro (contado/financiado)
+3. Ve pago estimado en tiempo real
+4. Descarga carátula PDF
 
-To learn more about Next.js, take a look at the following resources:
+### Asesor
+1. Usa comparador A/B/C para mostrar opciones
+2. Ajusta nivel de tasa según perfil del cliente
+3. Exporta tabla completa en XLSX
+4. Copia JSON para integrar con CRM
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+## 🧮 Motor de Cálculo
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+### Características Principales
 
-## Deploy on Vercel
+- **TAN Fijo**: 36%, 40% o 45% anual sobre saldo insoluto
+- **Comisión de Apertura**: 3% del monto financiado (+ IVA)
+- **GPS Mensual**: $400 + IVA cada periodo
+- **Prorrateo**: Primer pago a la próxima quincena con días reales
+- **IVA**: 16% sobre intereses, comisiones y GPS
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+### Ejemplo de Cálculo
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```
+Vehículo: $405,900
+Enganche: $121,770 (30%)
+Plazo: 48 meses
+TAN: 45%
+
+Principal: $284,130
+PMT Base: $12,850.09
+Primer Pago: $13,598.22 (incluye prorrateo + GPS)
+Segundo Pago: $14,952.42 (pago mensual típico)
+```
+
+## 🎨 Diseño y UX
+
+### Branding
+- **Colores**: Verde primario (#2EB872) y azul secundario (#36A3E0)
+- **Gradiente**: Header con transición verde → azul
+- **Tipografía**: Sans-serif moderna con alta legibilidad
+
+### Responsive Design
+- **Desktop**: Grid 2/3 + 1/3 (formulario + resumen)
+- **Mobile**: Stack vertical con formulario expandido
+- **Accesibilidad**: Contraste AA, foco visible, labels descriptivos
+
+## 🧪 Testing
+
+### Casos Cubiertos
+
+- ✅ Cálculo PMT con fórmula francesa
+- ✅ Lógica de próxima quincena (15 o último día)
+- ✅ Prorrateo por días reales (ejemplo PRD)
+- ✅ Diferentes niveles de tasa A/B/C
+- ✅ Seguro financiado vs contado
+- ✅ Balance final en cero
+
+```bash
+# Ejecutar tests
+npm test
+
+# Tests con cobertura
+npm test -- --coverage
+
+# Tests en modo watch
+npm test -- --watch
+```
+
+## 📁 Estructura del Proyecto
+
+```
+src/
+├── app/
+│   ├── api/quotes/compute/     # Endpoint de cálculo
+│   └── page.tsx                # Página principal
+├── components/
+│   ├── form/QuoteForm.tsx      # Formulario principal
+│   ├── summary/SummaryCard.tsx # Resumen y acciones
+│   └── ui/                     # Componentes base
+├── lib/
+│   ├── math/finance.ts         # Motor de cálculo
+│   ├── dates/quincena.ts       # Lógica de fechas
+│   └── utils.ts                # Utilidades
+├── pdf/Caratula.tsx           # Generación PDF
+├── csv/export.ts              # Exportación XLSX
+└── styles/theme.ts            # Configuración de marca
+```
+
+## 🔧 Configuración
+
+### Variables de Negocio
+
+Editar `src/lib/math/finance.ts`:
+
+```typescript
+const defaultSettings = {
+  annual_nominal_rate: 0.45,    // TAN 45%
+  iva: 0.16,                    // IVA 16%
+  opening_fee_rate: 0.03,       // Comisión 3%
+  gps_monthly: 400,             // GPS mensual
+  // ...
+};
+```
+
+### Branding
+
+Editar `src/styles/theme.ts`:
+
+```typescript
+export const brand = {
+  primary: "#2EB872",           // Verde corporativo
+  secondary: "#36A3E0",         // Azul corporativo
+  gradient: "linear-gradient(...)",
+};
+```
+
+## 🚀 Despliegue
+
+### Vercel (Recomendado)
+
+```bash
+# Conectar repositorio a Vercel
+# Auto-deploy en cada push a main
+```
+
+### Docker
+
+```dockerfile
+FROM node:18-alpine
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci --only=production
+COPY . .
+RUN npm run build
+EXPOSE 4321
+CMD ["npm", "start"]
+```
+
+## 📄 API Reference
+
+### POST `/api/quotes/compute`
+
+Calcula una cotización completa.
+
+**Request:**
+```json
+{
+  "vehicle_value": 405900,
+  "down_payment_amount": 121770,
+  "term_months": 48,
+  "insurance": { "mode": "cash", "amount": 19000 },
+  "settings": {
+    "annual_nominal_rate": 0.45,
+    "iva": 0.16,
+    "opening_fee_rate": 0.03,
+    "gps_monthly": 400,
+    "first_payment_rule": "next_quincena"
+  },
+  "as_of": "2025-08-11"
+}
+```
+
+**Response:**
+```json
+{
+  "summary": {
+    "pmt_base": 12850.09,
+    "pmt_total_month2": 14952.42,
+    "first_payment_date": "2025-08-15",
+    "principal_financed": 284130,
+    "initial_outlay": 151121.72
+  },
+  "schedule": [...], // Tabla de amortización completa
+  "inputs": {...}    // Echo de inputs con settings
+}
+```
+
+## 🐛 Solución de Problemas
+
+### Puerto en Uso
+```bash
+# El simulador usa puerto 4321 por defecto
+# Si está ocupado, cambiar en package.json
+"dev": "next dev -p 5000"
+```
+
+### Errores de Build
+```bash
+# Limpiar cache
+rm -rf .next node_modules
+npm install
+npm run build
+```
+
+### Tests Fallan
+```bash
+# Verificar dependencias de test
+npm install -D vitest @vitest/ui
+npm test
+```
+
+## 🤝 Contribución
+
+1. Fork del proyecto
+2. Crear rama feature (`git checkout -b feature/nueva-funcionalidad`)
+3. Commit cambios (`git commit -m 'Añadir nueva funcionalidad'`)
+4. Push a la rama (`git push origin feature/nueva-funcionalidad`)
+5. Crear Pull Request
+
+### Estándares de Código
+
+- **TypeScript estricto**: No usar `any`, interfaces tipadas
+- **Tests obligatorios**: Cobertura >80% para funciones críticas
+- **Commits semánticos**: `feat:`, `fix:`, `docs:`, etc.
+- **ESLint/Prettier**: Código formateado automáticamente
+
+## 📝 Changelog
+
+### v1.0.0 - 2025-08-11
+- ✅ Motor de cálculo completo con prorrateo
+- ✅ UI profesional con comparador A/B/C
+- ✅ GPS mensual integrado
+- ✅ Exportaciones PDF/XLSX/JSON
+- ✅ Tests unitarios completos
+- ✅ README y documentación
+
+## 📞 Soporte
+
+- **Issues**: [GitHub Issues](link-to-issues)
+- **Docs**: Este README
+- **Tests**: `npm test` para validar funcionamiento
+
+## 📄 Licencia
+
+Copyright © 2025 Financiera Incentiva. Todos los derechos reservados.

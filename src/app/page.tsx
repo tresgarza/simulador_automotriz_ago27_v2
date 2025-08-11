@@ -1,103 +1,156 @@
-import Image from "next/image";
+"use client";
+import { useMemo, useState } from "react";
+import { brand } from "@/styles/theme";
+import { QuoteForm, type FormData } from "@/components/form/QuoteForm";
+import { SummaryCard } from "@/components/summary/SummaryCard";
+
+type ApiResult = {
+  summary: {
+    pmt_total_month2: number;
+    principal_total: number;
+    initial_outlay: number;
+    first_payment_date: string;
+    last_payment_date: string;
+    pmt_base: number;
+    opening_fee: number;
+    opening_fee_iva: number;
+    gps: number;
+    gps_iva: number;
+  };
+  schedule: {
+    k: number;
+    date: string;
+    saldo_ini: number;
+    interes: number;
+    iva_interes: number;
+    capital: number;
+    pmt: number;
+    gps_rent: number;
+    gps_rent_iva: number;
+    pago_total: number;
+    saldo_fin: number;
+  }[];
+};
+
+type ComparativeResult = {
+  A: ApiResult;
+  B: ApiResult;
+  C: ApiResult;
+};
 
 export default function Home() {
-  return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+  const [result, setResult] = useState<ApiResult | ComparativeResult | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+  const getRateForTier = (tier: string): number => {
+    switch (tier) {
+      case "A": return 0.36;
+      case "B": return 0.40;
+      case "C": return 0.45;
+      default: return 0.45;
+    }
+  };
+
+  const onSubmit = async (data: FormData) => {
+    setIsSubmitting(true);
+    try {
+      if (data.compare_all) {
+        // Fetch all three tiers in parallel
+        const promises = ["A", "B", "C"].map(async (tier) => {
+          const body = {
+            vehicle_value: data.vehicle_value,
+            down_payment_amount: data.down_payment_amount,
+            term_months: data.term_months,
+            insurance: { mode: data.insurance_mode, amount: data.insurance_amount },
+            settings: {
+              annual_nominal_rate: getRateForTier(tier),
+              iva: 0.16,
+              opening_fee_rate: 0.03,
+              gps_initial: 0, // No installation fee for now
+              gps_monthly: 400,
+              first_payment_rule: "next_quincena" as const,
+              day_count: "A360" as const,
+              finance_insurance_mode: "add_to_principal" as const,
+            },
+            as_of: new Date().toISOString().slice(0, 10),
+          };
+
+          const res = await fetch("/api/quotes/compute", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify(body),
+          });
+          const json = await res.json();
+          return [tier, json] as const;
+        });
+
+        const results = await Promise.all(promises);
+        const comparativeResult = results.reduce((acc, [tier, result]) => {
+          acc[tier as keyof ComparativeResult] = result;
+          return acc;
+        }, {} as ComparativeResult);
+
+        setResult(comparativeResult);
+      } else {
+        // Single calculation
+        const body = {
+          vehicle_value: data.vehicle_value,
+          down_payment_amount: data.down_payment_amount,
+          term_months: data.term_months,
+          insurance: { mode: data.insurance_mode, amount: data.insurance_amount },
+          settings: {
+            annual_nominal_rate: getRateForTier(data.rate_tier),
+            iva: 0.16,
+            opening_fee_rate: 0.03,
+            gps_initial: 0, // No installation fee for now
+            gps_monthly: 400,
+            first_payment_rule: "next_quincena" as const,
+            day_count: "A360" as const,
+            finance_insurance_mode: "add_to_principal" as const,
+          },
+          as_of: new Date().toISOString().slice(0, 10),
+        };
+
+        const res = await fetch("/api/quotes/compute", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify(body),
+        });
+        const json = await res.json();
+        setResult(json);
+      }
+    } catch (error) {
+      console.error("Error calculating quote:", error);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const gradient = useMemo(() => ({ background: brand.gradient }), []);
+  const isComparative = Boolean(result && "A" in result);
+
+  return (
+    <div className="min-h-screen" style={gradient}>
+      <div className="mx-auto max-w-7xl p-6 sm:p-10">
+        <header className="text-white mb-8">
+          <h1 className="text-4xl sm:text-5xl font-extrabold mb-2">
+            Simula tu Crédito Automotriz
+          </h1>
+          <p className="text-lg opacity-90">
+            Ajusta los valores para encontrar el plan perfecto para ti.
+          </p>
+        </header>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          <div className="lg:col-span-2">
+            <QuoteForm onSubmit={onSubmit} isSubmitting={isSubmitting} />
+          </div>
+
+          <div>
+            <SummaryCard result={result} isComparative={isComparative} />
+          </div>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+      </div>
     </div>
   );
 }
