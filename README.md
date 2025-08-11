@@ -187,16 +187,28 @@ export const brand = {
 
 ### Docker
 
-```dockerfile
-FROM node:18-alpine
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci --only=production
-COPY . .
-RUN npm run build
-EXPOSE 4321
-CMD ["npm", "start"]
+```bash
+# Build y ejecutar con Docker
+docker build -t simulador-automotriz .
+docker run -p 4321:4321 simulador-automotriz
+
+# O usando Docker Compose
+docker-compose up -d
 ```
+
+### Variables de Entorno
+
+Copia `env.example` a `.env.local` y ajusta los valores:
+
+```bash
+cp env.example .env.local
+```
+
+Variables clave:
+- `NODE_ENV`: production/development
+- `PORT`: puerto del servidor (default: 4321)
+- `NEXT_PUBLIC_DEFAULT_TAN_*`: tasas por nivel
+- `NEXT_PUBLIC_BRAND_*`: colores corporativos
 
 ## 📄 API Reference
 

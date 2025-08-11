@@ -190,7 +190,7 @@ function ComparativeCards({ result }: { result: ComparativeResult }) {
                   <p className="text-xs text-gray-600">TAN {tier.rate}</p>
                 </div>
                 <div className="text-right">
-                  <div className="text-2xl font-bold">
+                  <div className="text-2xl font-bold" data-testid={`nivel-${tier.key.toLowerCase()}-payment`}>
                     {formatMXN(tierResult.summary.pmt_total_month2)}
                   </div>
                   <div className="text-xs text-gray-600">Pago mes 2</div>

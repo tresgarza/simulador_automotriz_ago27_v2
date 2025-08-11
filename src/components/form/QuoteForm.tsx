@@ -71,6 +71,7 @@ export function QuoteForm({ onSubmit, isSubmitting }: QuoteFormProps) {
         <div>
           <label className="block text-sm font-medium text-gray-700 mb-2">
             Valor del Vehículo
+            <span className="ml-1 text-xs text-gray-500" title="Precio total del vehículo según factura">ℹ️</span>
           </label>
           <input
             type="number"
@@ -92,6 +93,7 @@ export function QuoteForm({ onSubmit, isSubmitting }: QuoteFormProps) {
             <span className="text-gray-500 ml-2">
               ({formatPercent(downPaymentPercent)})
             </span>
+            <span className="ml-1 text-xs text-gray-500" title="Mínimo 30% del valor del vehículo">ℹ️</span>
           </label>
           <input
             type="number"
@@ -118,6 +120,7 @@ export function QuoteForm({ onSubmit, isSubmitting }: QuoteFormProps) {
       <div>
         <label className="block text-sm font-medium text-gray-700 mb-3">
           Plazo del Crédito
+          <span className="ml-1 text-xs text-gray-500" title="Período de pago en meses">ℹ️</span>
         </label>
         <div className="grid grid-cols-5 gap-2">
           {[12, 24, 36, 48, 60].map((months) => (
@@ -138,10 +141,11 @@ export function QuoteForm({ onSubmit, isSubmitting }: QuoteFormProps) {
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 mb-3">
-            Nivel de Tasa
-          </label>
+              <div>
+        <label className="block text-sm font-medium text-gray-700 mb-3">
+          Nivel de Tasa
+          <span className="ml-1 text-xs text-gray-500" title="A: 36% TAN, B: 40% TAN, C: 45% TAN">ℹ️</span>
+        </label>
           <div className="flex gap-2">
             {rateTiers.map((tier) => (
               <label

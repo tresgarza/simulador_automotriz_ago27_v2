@@ -27,12 +27,27 @@ export function CaratulaPDF({ summary }: { summary: SummaryShape }) {
           <View style={styles.row}><Text>Primer pago</Text><Text>{summary.first_payment_date}</Text></View>
           <View style={styles.row}><Text>Último pago</Text><Text>{summary.last_payment_date}</Text></View>
         </View>
-        <View style={styles.section}>
-          <Text>Notas: IVA 16%, base 360/30, pagos sobre saldos insolutos, sujeto a aprobación.</Text>
-        </View>
-      </Page>
-    </Document>
-  );
+
+
+      {/* Notas Legales */}
+      <View style={{ marginTop: 20, padding: 10, backgroundColor: '#f8f9fa', borderRadius: 4 }}>
+        <Text style={{ fontSize: 10, fontWeight: 'bold', marginBottom: 6 }}>Notas Legales</Text>
+        <Text style={{ fontSize: 8, marginBottom: 3 }}>
+          • Cotización informativa, sujeta a análisis y aprobación. Las tasas y condiciones pueden cambiar sin previo aviso.
+        </Text>
+        <Text style={{ fontSize: 8, marginBottom: 3 }}>
+          • Los intereses causan IVA 16%. La comisión de apertura y el GPS se pagan al inicio.
+        </Text>
+        <Text style={{ fontSize: 8, marginBottom: 3 }}>
+          • Primer pago prorrateado a la siguiente quincena. Base de cálculo: 360 días, pagos sobre saldos insolutos.
+        </Text>
+        <Text style={{ fontSize: 8, marginBottom: 3 }}>
+          • La renta mensual de GPS y la instalación causan IVA. El CAT mostrado es informativo.
+        </Text>
+      </View>
+    </Page>
+  </Document>
+);
 }
 
 function formatMXN(n: number) {
