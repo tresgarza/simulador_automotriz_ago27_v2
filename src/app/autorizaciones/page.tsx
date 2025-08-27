@@ -1,10 +1,10 @@
 "use client";
-import { useState, useEffect } from "react";
-import { FileCheck, Users, Search, Eye, CheckCircle, XCircle, Clock, ChevronRight } from "lucide-react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { FileCheck, Users, Search, Filter, Eye, CheckCircle, XCircle, Clock, ChevronRight } from "lucide-react";
 import { useAuth } from "../../../lib/auth";
 import { SimulationService, SimulationWithQuote } from "../../../lib/simulation-service";
 import { formatMXN } from "@/lib/utils";
-import { AuthorizationForm } from "./components/AuthorizationForm";
+import { AuthorizationForm } from "../../components/authorization/AuthorizationForm";
 
 interface AuthorizationRequest {
   id: string;
@@ -25,23 +25,53 @@ export default function AutorizacionesPage() {
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
   const [selectedRequest, setSelectedRequest] = useState<AuthorizationRequest | null>(null);
   const [showAuthorizationForm, setShowAuthorizationForm] = useState(false);
+  const [isHydrated, setIsHydrated] = useState(false);
+  const [isLoadingData, setIsLoadingData] = useState(false);
+  const [authDetermined, setAuthDetermined] = useState(false);
+  const hasInitiatedLoading = useRef(false);
 
+  // Handle hydration
   useEffect(() => {
-    if (isAsesor && user) {
-      loadAuthorizationRequests();
+    setIsHydrated(true);
+  }, []);
+
+  const filterRequests = useCallback(() => {
+    if (!isHydrated || isLoading || requests.length === 0) return; // Don't filter during hydration, loading, or if no requests
+
+    let filtered = requests;
+
+    // Filter by status
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter(request => request.status === statusFilter);
     }
-  }, [isAsesor, user]);
 
-  useEffect(() => {
-    filterRequests();
-  }, [requests, searchTerm, statusFilter]);
+    // Filter by search term
+    if (searchTerm.trim()) {
+      const searchLower = searchTerm.toLowerCase();
+      filtered = filtered.filter(request => {
+        const quote = request.simulation?.quote;
+        return (
+          quote?.client_name?.toLowerCase().includes(searchLower) ||
+          quote?.client_email?.toLowerCase().includes(searchLower) ||
+          quote?.client_phone?.includes(searchTerm) ||
+          quote?.vehicle_brand?.toLowerCase().includes(searchLower) ||
+          quote?.vehicle_model?.toLowerCase().includes(searchLower)
+        );
+      });
+    }
 
-  const loadAuthorizationRequests = async () => {
+    setFilteredRequests(filtered);
+  }, [requests, searchTerm, statusFilter, isHydrated, isLoading]);
+
+  const loadAuthorizationRequests = useCallback(async () => {
+    if (!user || !isAsesor || !isHydrated || isLoadingData) return;
+
+    setIsLoadingData(true);
     setIsLoading(true);
     try {
       // Por ahora cargamos todas las simulaciones como solicitudes pendientes
       // En el futuro esto debería ser una tabla específica de solicitudes de autorización
-      const simulations = await SimulationService.getUserSimulations(user!.id, 'asesor');
+      const simulations = await SimulationService.getUserSimulations(user.id, 'asesor');
 
       const authorizationRequests: AuthorizationRequest[] = simulations.map(simulation => ({
         id: simulation.id,
@@ -53,43 +83,55 @@ export default function AutorizacionesPage() {
       setRequests(authorizationRequests);
     } catch (error) {
       console.error('Error loading authorization requests:', error);
+      setRequests([]); // Set empty array on error to prevent infinite loading
     } finally {
       setIsLoading(false);
+      setIsLoadingData(false);
     }
-  };
+  }, [user, isAsesor, isHydrated, isLoadingData]);
 
-  const filterRequests = () => {
-    let filtered = requests;
+  useEffect(() => {
+    if (isHydrated) {
+      setAuthDetermined(true);
 
-    // Filter by status
-    if (statusFilter !== 'all') {
-      filtered = filtered.filter(request => request.status === statusFilter);
+      // Immediately set loading to false if user is not an asesor
+      if (!isAsesor) {
+        setIsLoading(false);
+        return;
+      }
+
+      // If user is asesor and we haven't initiated loading yet, load requests
+      if (isAsesor && user && !hasInitiatedLoading.current) {
+        hasInitiatedLoading.current = true;
+        loadAuthorizationRequests();
+      }
     }
+  }, [isAsesor, user, isHydrated]); // Simplified dependencies
 
-    // Filter by search term
-    if (searchTerm.trim()) {
-      filtered = filtered.filter(request =>
-        request.simulation.quote.client_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        request.simulation.quote.client_email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        request.simulation.quote.client_phone?.includes(searchTerm) ||
-        request.simulation.quote.vehicle_brand?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        request.simulation.quote.vehicle_model?.toLowerCase().includes(searchTerm.toLowerCase())
-      );
+  // Reset loading ref when user changes
+  useEffect(() => {
+    hasInitiatedLoading.current = false;
+  }, [user?.id]);
+
+  useEffect(() => {
+    if (isHydrated) {
+      filterRequests();
     }
-
-    setFilteredRequests(filtered);
-  };
+  }, [filterRequests, isHydrated]);
 
   const handleAuthorizeRequest = (request: AuthorizationRequest) => {
     setSelectedRequest(request);
     setShowAuthorizationForm(true);
   };
 
-  const handleCloseAuthorizationForm = () => {
+  const handleCloseAuthorizationForm = useCallback(() => {
     setSelectedRequest(null);
     setShowAuthorizationForm(false);
-    loadAuthorizationRequests(); // Recargar la lista
-  };
+    // Only reload if we're not already loading
+    if (!isLoadingData) {
+      loadAuthorizationRequests();
+    }
+  }, [isLoadingData, loadAuthorizationRequests]);
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -108,6 +150,34 @@ export default function AutorizacionesPage() {
       default: return <Clock className="w-4 h-4" />;
     }
   };
+
+  // Memoize stats calculations to prevent unnecessary re-renders
+  const stats = useMemo(() => {
+    if (!isHydrated || requests.length === 0) {
+      return {
+        pending: 0,
+        approved: 0,
+        rejected: 0,
+        total: 0
+      };
+    }
+
+    return {
+      pending: requests.filter(r => r.status === 'pending').length,
+      approved: requests.filter(r => r.status === 'approved').length,
+      rejected: requests.filter(r => r.status === 'rejected').length,
+      total: requests.length
+    };
+  }, [requests, isHydrated]);
+
+  // Show loading during hydration to prevent hydration mismatch
+  if (!isHydrated || !authDetermined) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-white p-8 flex items-center justify-center">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600"></div>
+      </div>
+    );
+  }
 
   if (!isAsesor) {
     return (
@@ -150,7 +220,7 @@ export default function AutorizacionesPage() {
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-600">Pendientes</p>
                 <p className="text-2xl font-bold text-gray-900">
-                  {requests.filter(r => r.status === 'pending').length}
+                  {stats.pending}
                 </p>
               </div>
             </div>
@@ -164,7 +234,7 @@ export default function AutorizacionesPage() {
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-600">Aprobadas</p>
                 <p className="text-2xl font-bold text-gray-900">
-                  {requests.filter(r => r.status === 'approved').length}
+                  {stats.approved}
                 </p>
               </div>
             </div>
@@ -177,7 +247,7 @@ export default function AutorizacionesPage() {
               </div>
               <div className="ml-4">
                 <p className="text-sm font-medium text-gray-600">Total Solicitudes</p>
-                <p className="text-2xl font-bold text-gray-900">{requests.length}</p>
+                <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
               </div>
             </div>
           </div>
@@ -208,7 +278,7 @@ export default function AutorizacionesPage() {
               ].map((filter) => (
                 <button
                   key={filter.value}
-                  onClick={() => setStatusFilter(filter.value as 'all' | 'pending' | 'approved' | 'rejected')}
+                  onClick={() => setStatusFilter(filter.value as any)}
                   className={`px-4 py-3 rounded-xl font-medium transition-colors ${
                     statusFilter === filter.value
                       ? 'bg-emerald-600 text-white'
@@ -254,23 +324,23 @@ export default function AutorizacionesPage() {
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div>
                         <div className="text-sm font-medium text-gray-900">
-                          {request.simulation.quote.client_name || 'Cliente Anónimo'}
+                          {request.simulation?.quote?.client_name || 'Cliente Anónimo'}
                         </div>
                         <div className="text-sm text-gray-500">
-                          {request.simulation.quote.client_email || request.simulation.quote.client_phone}
+                          {request.simulation?.quote?.client_email || request.simulation?.quote?.client_phone || 'Sin contacto'}
                         </div>
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm text-gray-900">
-                        {request.simulation.quote.vehicle_brand} {request.simulation.quote.vehicle_model}
+                        {request.simulation?.quote?.vehicle_brand || 'N/A'} {request.simulation?.quote?.vehicle_model || ''}
                       </div>
                       <div className="text-sm text-gray-500">
-                        {request.simulation.quote.vehicle_year}
+                        {request.simulation?.quote?.vehicle_year || 'N/A'}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
-                      {formatMXN(request.simulation.quote.vehicle_value)}
+                      {formatMXN(request.simulation?.quote?.vehicle_value || 0)}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(request.status)}`}>

@@ -1,3 +1,4 @@
+import { createClient } from '@supabase/supabase-js'
 import { createBrowserClient } from '@supabase/ssr'
 
 // Configuración de Supabase
@@ -101,7 +102,7 @@ export interface Simulation {
   last_payment_date: string
   
   // JSON con la tabla completa de amortización
-  amortization_schedule: Record<string, unknown>
+  amortization_schedule: any
   
   // Metadata
   calculated_at: string

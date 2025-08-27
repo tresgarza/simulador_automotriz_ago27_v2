@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseClient } from '../../../../lib/supabase'
 
-export async function POST(_request: NextRequest) {
+export async function POST(request: NextRequest) {
   try {
     // Ejecutar las políticas RLS una por una
     const policies = [
@@ -38,7 +38,7 @@ export async function POST(_request: NextRequest) {
     
     for (const policy of policies) {
       try {
-        const { error } = await supabaseClient.rpc('exec_sql', { sql: policy })
+        const { data, error } = await supabaseClient.rpc('exec_sql', { sql: policy })
         if (error) {
           console.log(`Policy execution warning: ${error.message}`)
         }

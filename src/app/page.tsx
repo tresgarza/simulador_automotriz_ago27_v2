@@ -401,7 +401,7 @@ export default function Home() {
           <div className="mt-12 text-center">
             <div className="inline-flex items-center px-6 py-3 bg-white/10 backdrop-blur border border-white/20 rounded-2xl text-white">
               <span className="text-sm">
-                ✨ Calcula automáticamente {getAvailableRates().join(", ")} × 24, 36, 48, 60 meses
+                ✨ Calcula automáticamente A, B, C × 24, 36, 48, 60 meses
               </span>
             </div>
           </div>

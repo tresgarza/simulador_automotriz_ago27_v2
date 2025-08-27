@@ -20,18 +20,12 @@ const ClientFormSchema = BaseFormSchema.extend({
   client_name: z.string().min(2, "El nombre es requerido"),
   client_phone: z.string().min(10, "El teléfono debe tener al menos 10 dígitos"),
   client_email: z.string().email("Email inválido").optional().or(z.literal("")),
-  
-  // Datos del vehículo para clientes
+  // Datos del vehículo opcionales para clientes
   vehicle_brand: z.string().optional(),
   vehicle_model: z.string().optional(),
   vehicle_year: z.coerce.number().optional(),
-  
-  // Agencia donde compra el vehículo
-  dealer_agency: z.string().optional(),
-  
-  // Checkboxes
-  no_vehicle_yet: z.boolean().optional(),
-  privacy_consent: z.boolean().refine((val) => val === true, {
+  has_vehicle: z.boolean().default(true),
+  privacy_consent: z.boolean().refine(val => val === true, {
     message: "Debes autorizar el uso de tu información personal"
   }),
 });
@@ -40,26 +34,16 @@ const AgencyFormSchema = BaseFormSchema.extend({
   client_name: z.string().min(2, "El nombre del cliente es requerido"),
   client_phone: z.string().min(10, "El teléfono debe tener al menos 10 dígitos"),
   client_email: z.string().email("Email inválido").optional().or(z.literal("")),
-  
-  // Campo de vendedor para agencias
+  promoter_code: z.string().optional(),
   vendor_name: z.string().optional(),
-  
-  // Datos del vehículo para agencias (similar a clientes)
-  vehicle_brand: z.string().optional(),
-  vehicle_model: z.string().optional(),
-  vehicle_year: z.coerce.number().optional(),
-  
-  // Checkboxes
-  no_vehicle_yet: z.boolean().optional(),
+  origin_procedencia: z.string().optional(),
 });
 
 const AsesorFormSchema = BaseFormSchema.extend({
-  client_name: z.string().min(2, "El nombre del cliente es requerido"),
-  client_phone: z.string().min(10, "El teléfono debe tener al menos 10 dígitos"),
+  client_name: z.string().optional(),
+  client_phone: z.string().optional(),
   client_email: z.string().email("Email inválido").optional().or(z.literal("")),
-  promoter_code: z.string().optional(),
   vendor_name: z.string().optional(),
-  dealer_agency: z.string().optional(),
   origin_procedencia: z.string().optional(),
   // Datos adicionales del vehículo
   vehicle_brand: z.string().optional(),
@@ -68,13 +52,18 @@ const AsesorFormSchema = BaseFormSchema.extend({
   vehicle_type: z.string().optional(),
   vehicle_usage: z.string().optional(),
   vehicle_origin: z.string().optional(),
-  serial_number: z.string().optional(),
+  // Checkboxes de NO APLICA
+  client_data_na: z.boolean().default(false),
+  vehicle_data_na: z.boolean().default(false),
 });
 
 // Tipo unión que incluye todos los campos posibles
-export type EnhancedFormData = z.output<typeof ClientFormSchema> & 
-                              z.output<typeof AgencyFormSchema> & 
-                              z.output<typeof AsesorFormSchema>;
+export type EnhancedFormData = z.output<typeof AsesorFormSchema> & {
+  has_vehicle?: boolean;
+  privacy_consent?: boolean;
+  client_data_na?: boolean;
+  vehicle_data_na?: boolean;
+};
 
 interface EnhancedQuoteFormProps {
   onSubmit: (data: EnhancedFormData) => Promise<void>;
@@ -105,8 +94,6 @@ const Tooltip = ({ text, children }: { text: string; children: React.ReactNode }
 
 export function EnhancedQuoteForm({ onSubmit, isSubmitting, hasResults = false }: EnhancedQuoteFormProps) {
   const { user, isAsesor, isAgency, isClient } = useAuth();
-  const [noVehicleYet, setNoVehicleYet] = useState(false);
-  const [isHydrated, setIsHydrated] = useState(false);
   
   // Determinar el schema según el tipo de usuario
   const getFormSchema = () => {
@@ -121,18 +108,24 @@ export function EnhancedQuoteForm({ onSubmit, isSubmitting, hasResults = false }
     watch,
     setValue,
     formState: { errors },
-  } = useForm<any>({
-    resolver: zodResolver(getFormSchema()),
+  } = useForm<EnhancedFormData>({
+    resolver: zodResolver(getFormSchema()) as any,
     defaultValues: {
       vehicle_value: 405900,
       down_payment_amount: Math.round(405900 * 0.3),
       insurance_mode: "cash",
       insurance_amount: 19500,
       commission_mode: "cash",
-      // NO pre-llenar datos del usuario para agencias - ellas capturan datos del cliente
-      client_name: "",
-      client_phone: "",
-      client_email: "",
+      // Pre-llenar datos del usuario si está logueado
+      client_name: user?.name || "",
+      client_phone: user?.phone || "",
+      client_email: user?.email || "",
+      // Valores por defecto para clientes
+      has_vehicle: true,
+      privacy_consent: false,
+      // Valores por defecto para asesores
+      client_data_na: false,
+      vehicle_data_na: false,
     },
   });
 
@@ -140,6 +133,10 @@ export function EnhancedQuoteForm({ onSubmit, isSubmitting, hasResults = false }
   const commissionMode = watch("commission_mode") as string;
   const vehicleValue = watch("vehicle_value") as number;
   const downPayment = watch("down_payment_amount") as number;
+  const hasVehicle = watch("has_vehicle" as any) as boolean;
+  const privacyConsent = watch("privacy_consent" as any) as boolean;
+  const clientDataNA = watch("client_data_na" as any) as boolean;
+  const vehicleDataNA = watch("vehicle_data_na" as any) as boolean;
 
   const downPaymentPercent = vehicleValue > 0 ? downPayment / vehicleValue : 0;
   const minDownPayment = vehicleValue * 0.3;
@@ -151,17 +148,16 @@ export function EnhancedQuoteForm({ onSubmit, isSubmitting, hasResults = false }
     }
   };
 
-  // Efecto para manejar la hidratación
+  // Pre-llenar datos del usuario cuando se loguea
   useEffect(() => {
-    setIsHydrated(true);
-  }, []);
-
-  // NO auto-completar datos del cliente para ASESORES ni AGENCIAS
-  // Ambos tipos de usuario deben capturar datos del cliente real
-  useEffect(() => {
-    // Auto-completado deshabilitado para mantener consistencia
-    // Tanto asesores como agencias capturan datos del cliente real
-  }, [user, setValue, isAsesor, isAgency]);
+    if (user) {
+      setValue("client_name", user.name);
+      setValue("client_phone", user.phone);
+      if (user.email) {
+        setValue("client_email", user.email);
+      }
+    }
+  }, [user, setValue]);
 
   return (
     <div className="relative">
@@ -176,28 +172,41 @@ export function EnhancedQuoteForm({ onSubmit, isSubmitting, hasResults = false }
               <Calculator className="w-7 h-7 md:w-8 md:h-8 text-white" />
             </div>
             <h2 className="text-xl md:text-2xl font-bold text-gray-800 mb-2">
-              {!isHydrated ? "Calcula tu Crédito" : (isClient ? "Calcula tu Crédito" : "Nueva Cotización")}
+              {isClient ? "Calcula tu Crédito" : "Nueva Cotización"}
             </h2>
             <p className="text-sm md:text-base text-gray-600">
-              {!isHydrated 
-                ? "Ingresa los datos de tu vehículo"
-                : (isClient 
-                  ? "Ingresa los datos de tu vehículo" 
-                  : `Cotización como ${isAsesor ? "Asesor" : "Agencia"}`
-                )
+              {isClient 
+                ? "Ingresa los datos de tu vehículo" 
+                : `Cotización como ${isAsesor ? "Asesor" : "Agencia"}`
               }
             </p>
           </div>
 
-          {/* Datos del Cliente - Solo si no es cliente anónimo */}
-          {isHydrated && !isClient && (
-            <div className="bg-blue-50 border border-blue-200 rounded-2xl p-6 space-y-4">
-              <h3 className="text-lg font-semibold text-blue-800 flex items-center">
+          {/* Datos del Cliente - Siempre mostrar */}
+          <div className={`border border-blue-200 rounded-2xl p-6 space-y-4 ${
+            isClient ? 'bg-emerald-50 border-emerald-200' : 'bg-blue-50 border-blue-200'
+          }`}>
+            <div className="flex items-center justify-between">
+              <h3 className={`text-lg font-semibold flex items-center ${
+                isClient ? 'text-emerald-800' : 'text-blue-800'
+              }`}>
                 <User className="w-5 h-5 mr-2" />
-                Datos del Cliente
+                {isClient ? "Tus Datos" : "Datos del Cliente"}
               </h3>
+              {isAsesor && (
+                <label className="flex items-center space-x-2 text-sm">
+                  <input
+                    type="checkbox"
+                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                    {...register("client_data_na" as any)}
+                  />
+                  <span className="text-gray-600">NO APLICA</span>
+                </label>
+              )}
+            </div>
               
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {(!isAsesor || !clientDataNA) && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Nombre Completo *
@@ -209,7 +218,7 @@ export function EnhancedQuoteForm({ onSubmit, isSubmitting, hasResults = false }
                     {...register("client_name")}
                   />
                   {errors.client_name && (
-                    <p className="text-red-600 text-sm mt-1">{String(errors.client_name.message)}</p>
+                    <p className="text-red-600 text-sm mt-1">{errors.client_name.message}</p>
                   )}
                 </div>
 
@@ -222,12 +231,12 @@ export function EnhancedQuoteForm({ onSubmit, isSubmitting, hasResults = false }
                     <input
                       type="tel"
                       className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-2xl focus:ring-4 focus:ring-blue-300/50 focus:border-blue-400"
-                      placeholder="81XXXXXXXX"
+                      placeholder="8112345678"
                       {...register("client_phone")}
                     />
                   </div>
                   {errors.client_phone && (
-                    <p className="text-red-600 text-sm mt-1">{String(errors.client_phone.message)}</p>
+                    <p className="text-red-600 text-sm mt-1">{errors.client_phone.message}</p>
                   )}
                 </div>
 
@@ -245,152 +254,109 @@ export function EnhancedQuoteForm({ onSubmit, isSubmitting, hasResults = false }
                     />
                   </div>
                   {errors.client_email && (
-                    <p className="text-red-600 text-sm mt-1">{String(errors.client_email.message)}</p>
+                    <p className="text-red-600 text-sm mt-1">{errors.client_email.message}</p>
                   )}
                 </div>
 
+                {(isAgency || isAsesor) && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Código Promotor
+                    </label>
+                    <input
+                      type="text"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-2xl focus:ring-4 focus:ring-blue-300/50 focus:border-blue-400"
+                      placeholder="PROM123"
+                      {...register("promoter_code")}
+                    />
+                  </div>
+                )}
 
+                {(isAgency || isAsesor) && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Vendedor
+                      </label>
+                      <input
+                        type="text"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-2xl focus:ring-4 focus:ring-blue-300/50 focus:border-blue-400"
+                        placeholder="Nombre del vendedor"
+                        {...register("vendor_name")}
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Procedencia
+                      </label>
+                      <select
+                        className="w-full px-4 py-3 border border-gray-300 rounded-2xl focus:ring-4 focus:ring-blue-300/50 focus:border-blue-400"
+                        {...register("origin_procedencia")}
+                      >
+                        <option value="">Seleccionar...</option>
+                        <option value="web">Página Web</option>
+                        <option value="referido">Referido</option>
+                        <option value="agencia">Agencia</option>
+                        <option value="facebook">Facebook</option>
+                        <option value="google">Google</option>
+                        <option value="otro">Otro</option>
+                      </select>
+                    </div>
+                  </div>
+                )}
               </div>
 
-              {/* Campos específicos por tipo de usuario */}
-              {isAgency && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Vendedor
-                  </label>
-                  <input
-                    type="text"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-2xl focus:ring-4 focus:ring-blue-300/50 focus:border-blue-400"
-                    placeholder="Nombre del vendedor"
-                    {...register("vendor_name")}
-                  />
-                </div>
-              )}
-
-              {isAsesor && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Agencia
-                    </label>
-                    <input
-                      type="text"
-                      className="w-full px-4 py-3 border border-gray-300 rounded-2xl focus:ring-4 focus:ring-blue-300/50 focus:border-blue-400"
-                      placeholder="Honda Tec, Carpat, Facebook..."
-                      {...register("dealer_agency")}
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Vendedor
-                    </label>
-                    <input
-                      type="text"
-                      className="w-full px-4 py-3 border border-gray-300 rounded-2xl focus:ring-4 focus:ring-blue-300/50 focus:border-blue-400"
-                      placeholder="Nombre del vendedor"
-                      {...register("vendor_name")}
-                    />
-                  </div>
+              {isAsesor && clientDataNA && (
+                <div className="text-center py-8 text-gray-500">
+                  <User className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                  <p>Datos del cliente no aplicables para esta cotización</p>
+                  <p className="text-sm">Los campos de cliente han sido deshabilitados</p>
                 </div>
               )}
             </div>
-          )}
 
-          {/* Datos del Cliente General */}
-          {isHydrated && isClient && (
-            <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-6 space-y-4">
-              <h3 className="text-lg font-semibold text-emerald-800 flex items-center">
-                <User className="w-5 h-5 mr-2" />
-                Tus Datos Personales
+          {/* Datos del Vehículo - Para todos los usuarios */}
+          <div className="bg-gray-50 border border-gray-200 rounded-2xl p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-lg font-semibold text-gray-800 flex items-center">
+                <Car className="w-5 h-5 mr-2" />
+                Datos del Vehículo
               </h3>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Nombre Completo *
-                  </label>
-                  <input
-                    type="text"
-                    className="w-full px-4 py-3 border border-gray-300 rounded-2xl focus:ring-4 focus:ring-emerald-300/50 focus:border-emerald-400"
-                    placeholder="Tu nombre completo"
-                    {...register("client_name")}
-                  />
-                  {errors.client_name && (
-                    <p className="text-red-600 text-sm mt-1">{String(errors.client_name.message)}</p>
-                  )}
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Teléfono *
-                  </label>
-                  <div className="relative">
-                    <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+              <div className="flex items-center space-x-4">
+                {isClient && (
+                  <label className="flex items-center space-x-2 text-sm">
                     <input
-                      type="tel"
-                      className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-2xl focus:ring-4 focus:ring-emerald-300/50 focus:border-emerald-400"
-                      placeholder="81XXXXXXXX"
-                      {...register("client_phone")}
+                      type="checkbox"
+                      className="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                      {...register("has_vehicle" as any)}
                     />
-                  </div>
-                  {errors.client_phone && (
-                    <p className="text-red-600 text-sm mt-1">{String(errors.client_phone.message)}</p>
-                  )}
-                </div>
-
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Correo Electrónico
+                    <span className="text-gray-600">Ya tengo el vehículo definido</span>
                   </label>
-                  <div className="relative">
-                    <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                )}
+                {isAsesor && (
+                  <label className="flex items-center space-x-2 text-sm">
                     <input
-                      type="email"
-                      className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-2xl focus:ring-4 focus:ring-emerald-300/50 focus:border-emerald-400"
-                      placeholder="tu@email.com"
-                      {...register("client_email")}
+                      type="checkbox"
+                      className="rounded border-gray-300 text-gray-600 focus:ring-gray-500"
+                      {...register("vehicle_data_na" as any)}
                     />
-                  </div>
-                  {errors.client_email && (
-                    <p className="text-red-600 text-sm mt-1">{String(errors.client_email.message)}</p>
-                  )}
-                </div>
+                    <span className="text-gray-600">NO APLICA</span>
+                  </label>
+                )}
               </div>
             </div>
-          )}
 
-          {/* Información del Vehículo para Clientes */}
-          {isHydrated && isClient && (
-            <div className="bg-blue-50 border border-blue-200 rounded-2xl p-6 space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-blue-800 flex items-center">
-                  <Car className="w-5 h-5 mr-2" />
-                  Información del Vehículo
-                </h3>
-                <label className="flex items-center space-x-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={noVehicleYet}
-                    onChange={(e) => {
-                      setNoVehicleYet(e.target.checked);
-                      setValue("no_vehicle_yet", e.target.checked);
-                    }}
-                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                  />
-                  <span className="text-gray-600">No aplica</span>
-                </label>
-              </div>
-              
-              <div className={`grid grid-cols-1 md:grid-cols-3 gap-4 ${noVehicleYet ? 'opacity-50 pointer-events-none' : ''}`}>
+            {/* Mostrar campos si: cliente con vehículo, agencia siempre, o asesor sin NO APLICA */}
+            {((isClient && hasVehicle) || isAgency || (isAsesor && !vehicleDataNA)) && (
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
                     Marca
                   </label>
                   <input
                     type="text"
-                    disabled={noVehicleYet}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-2xl focus:ring-4 focus:ring-blue-300/50 focus:border-blue-400 disabled:bg-gray-100"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-2xl focus:ring-4 focus:ring-emerald-300/50 focus:border-emerald-400"
                     placeholder="Toyota, Honda, Nissan..."
                     {...register("vehicle_brand")}
                   />
@@ -402,8 +368,7 @@ export function EnhancedQuoteForm({ onSubmit, isSubmitting, hasResults = false }
                   </label>
                   <input
                     type="text"
-                    disabled={noVehicleYet}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-2xl focus:ring-4 focus:ring-blue-300/50 focus:border-blue-400 disabled:bg-gray-100"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-2xl focus:ring-4 focus:ring-emerald-300/50 focus:border-emerald-400"
                     placeholder="Corolla, Civic, Sentra..."
                     {...register("vehicle_model")}
                   />
@@ -417,183 +382,298 @@ export function EnhancedQuoteForm({ onSubmit, isSubmitting, hasResults = false }
                     type="number"
                     min="2000"
                     max="2025"
-                    disabled={noVehicleYet}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-2xl focus:ring-4 focus:ring-blue-300/50 focus:border-blue-400 disabled:bg-gray-100"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-2xl focus:ring-4 focus:ring-emerald-300/50 focus:border-emerald-400"
                     placeholder="2024"
                     {...register("vehicle_year")}
                   />
                 </div>
+
+                {/* Campos adicionales para asesores */}
+                {isAsesor && (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Tipo de Vehículo
+                      </label>
+                      <select
+                        className="w-full px-4 py-3 border border-gray-300 rounded-2xl focus:ring-4 focus:ring-emerald-300/50 focus:border-emerald-400"
+                        {...register("vehicle_type")}
+                      >
+                        <option value="">Seleccionar...</option>
+                        <option value="sedan">Sedán</option>
+                        <option value="hatchback">Hatchback</option>
+                        <option value="suv">SUV</option>
+                        <option value="pickup">Pickup</option>
+                        <option value="coupe">Coupé</option>
+                        <option value="convertible">Convertible</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Uso del Vehículo
+                      </label>
+                      <select
+                        className="w-full px-4 py-3 border border-gray-300 rounded-2xl focus:ring-4 focus:ring-emerald-300/50 focus:border-emerald-400"
+                        {...register("vehicle_usage")}
+                      >
+                        <option value="">Seleccionar...</option>
+                        <option value="personal">Personal</option>
+                        <option value="comercial">Comercial</option>
+                        <option value="taxi">Taxi</option>
+                        <option value="uber">Uber</option>
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-2">
+                        Origen del Vehículo
+                      </label>
+                      <select
+                        className="w-full px-4 py-3 border border-gray-300 rounded-2xl focus:ring-4 focus:ring-emerald-300/50 focus:border-emerald-400"
+                        {...register("vehicle_origin")}
+                      >
+                        <option value="">Seleccionar...</option>
+                        <option value="agencia">Agencia</option>
+                        <option value="seminuevo">Seminuevo</option>
+                        <option value="particular">Particular</option>
+                      </select>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* Mensaje cuando no aplica o no tiene vehículo */}
+            {((isClient && !hasVehicle) || (isAsesor && vehicleDataNA)) && (
+              <div className="text-center py-8 text-gray-500">
+                <Car className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                {isClient && !hasVehicle && (
+                  <>
+                    <p>No hay problema, puedes simular con un valor estimado</p>
+                    <p className="text-sm">Podrás ajustar los datos cuando tengas el vehículo definido</p>
+                  </>
+                )}
+                {isAsesor && vehicleDataNA && (
+                  <>
+                    <p>Datos del vehículo no aplicables para esta cotización</p>
+                    <p className="text-sm">Los campos de vehículo han sido deshabilitados</p>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+
+          {/* Eliminar la sección anterior de vehículo para asesores */}
+          {false && isAsesor && (
+            <div className="bg-gray-50 border border-gray-200 rounded-2xl p-6 space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-lg font-semibold text-gray-800 flex items-center">
+                  <Car className="w-5 h-5 mr-2" />
+                  Datos del Vehículo
+                </h3>
+                <label className="flex items-center space-x-2 text-sm">
+                  <input
+                    type="checkbox"
+                    className="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
+                    {...register("has_vehicle" as any)}
+                  />
+                  <span className="text-gray-600">Ya tengo el vehículo definido</span>
+                </label>
               </div>
 
-              {/* Campo de agencia para clientes generales */}
+              {hasVehicle && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Marca
+                    </label>
+                    <input
+                      type="text"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-2xl focus:ring-4 focus:ring-emerald-300/50 focus:border-emerald-400"
+                      placeholder="Toyota, Honda, Nissan..."
+                      {...register("vehicle_brand")}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Modelo
+                    </label>
+                    <input
+                      type="text"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-2xl focus:ring-4 focus:ring-emerald-300/50 focus:border-emerald-400"
+                      placeholder="Corolla, Civic, Sentra..."
+                      {...register("vehicle_model")}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Año
+                    </label>
+                    <input
+                      type="number"
+                      min="2000"
+                      max="2025"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-2xl focus:ring-4 focus:ring-emerald-300/50 focus:border-emerald-400"
+                      placeholder="2024"
+                      {...register("vehicle_year")}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {!hasVehicle && (
+                <div className="text-center py-8 text-gray-500">
+                  <Car className="w-12 h-12 mx-auto mb-3 opacity-50" />
+                  <p>No hay problema, puedes simular con un valor estimado</p>
+                  <p className="text-sm">Podrás ajustar los datos cuando tengas el vehículo definido</p>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Valor del Vehículo */}
+          <div className="space-y-3">
+            <label className="flex items-center text-gray-800 font-medium text-sm md:text-base">
+              <Car className="w-4 h-4 md:w-5 md:h-5 mr-2 text-emerald-600" />
+              Valor del Vehículo
+            </label>
+            <div className="relative">
+              <input
+                type="text"
+                className="w-full px-4 py-3 border border-gray-300 rounded-2xl focus:ring-4 focus:ring-emerald-300/50 focus:border-emerald-400"
+                placeholder="$405,900"
+                {...register("vehicle_value", {
+                  onBlur: handleVehicleValueBlur
+                })}
+              />
+            </div>
+          </div>
+
+          {/* Enganche */}
+          <div className="space-y-3">
+            <label className="flex items-center text-gray-800 font-medium text-sm md:text-base">
+              <Banknote className="w-4 h-4 md:w-5 md:h-5 mr-2 text-emerald-600" />
+              Enganche
+            </label>
+            <div className="relative">
+              <input
+                type="text"
+                className="w-full px-4 py-3 border border-gray-300 rounded-2xl focus:ring-4 focus:ring-emerald-300/50 focus:border-emerald-400"
+                placeholder={formatMXN(minDownPayment)}
+                {...register("down_payment_amount", {
+                  onBlur: handleDownPaymentBlur
+                })}
+              />
+            </div>
+            {isDownPaymentLow && (
+              <p className="text-red-600 text-sm flex items-center">
+                <Info className="w-4 h-4 mr-1" />
+                El enganche mínimo es 30% ({formatMXN(minDownPayment)})
+              </p>
+            )}
+          </div>
+
+          {/* Seguro */}
+          <div className="space-y-4">
+            <label className="flex items-center text-gray-800 font-medium text-sm md:text-base">
+              <Shield className="w-4 h-4 md:w-5 md:h-5 mr-2 text-emerald-600" />
+                  <input
+                    type="text"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-2xl focus:ring-4 focus:ring-emerald-300/50 focus:border-emerald-400"
+                    placeholder="Toyota"
+                    {...register("vehicle_brand")}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Modelo
+                  </label>
+                  <input
+                    type="text"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-2xl focus:ring-4 focus:ring-emerald-300/50 focus:border-emerald-400"
+                    placeholder="Corolla"
+                    {...register("vehicle_model")}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Año
+                  </label>
+                  <input
+                    type="number"
+                    min="2000"
+                    max="2025"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-2xl focus:ring-4 focus:ring-emerald-300/50 focus:border-emerald-400"
+                    placeholder="2024"
+                    {...register("vehicle_year")}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Tipo
+                  </label>
+                  <select
+                    className="w-full px-4 py-3 border border-gray-300 rounded-2xl focus:ring-4 focus:ring-emerald-300/50 focus:border-emerald-400"
+                    {...register("vehicle_type")}
+                  >
+                    <option value="">Seleccionar...</option>
+                    <option value="sedan">Sedán</option>
+                    <option value="suv">SUV</option>
+                    <option value="hatchback">Hatchback</option>
+                    <option value="pickup">Pickup</option>
+                    <option value="coupe">Coupé</option>
+                    <option value="convertible">Convertible</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Uso
+                  </label>
+                  <select
+                    className="w-full px-4 py-3 border border-gray-300 rounded-2xl focus:ring-4 focus:ring-emerald-300/50 focus:border-emerald-400"
+                    {...register("vehicle_usage")}
+                  >
+                    <option value="">Seleccionar...</option>
+                    <option value="personal">Personal</option>
+                    <option value="comercial">Comercial</option>
+                    <option value="taxi">Taxi</option>
+                    <option value="uber">Uber</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Origen
+                  </label>
+                  <select
+                    className="w-full px-4 py-3 border border-gray-300 rounded-2xl focus:ring-4 focus:ring-emerald-300/50 focus:border-emerald-400"
+                    {...register("vehicle_origin")}
+                  >
+                    <option value="">Seleccionar...</option>
+                    <option value="nacional">Nacional</option>
+                    <option value="importado">Importado</option>
+                  </select>
+                </div>
+              </div>
+
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Agencia donde comprarás el vehículo
+                  Número de Serie / VIN
                 </label>
                 <input
                   type="text"
-                  className="w-full px-4 py-3 border border-gray-300 rounded-2xl focus:ring-4 focus:ring-blue-300/50 focus:border-blue-400"
-                  placeholder="Honda Tec, Carpat, Facebook..."
-                  {...register("dealer_agency")}
+                  className="w-full px-4 py-3 border border-gray-300 rounded-2xl focus:ring-4 focus:ring-emerald-300/50 focus:border-emerald-400"
+                  placeholder="1HGBH41JXMN109186"
+                  {...register("serial_number")}
                 />
               </div>
-
-              {noVehicleYet && (
-                <div className="bg-blue-100 border border-blue-300 rounded-xl p-4">
-                  <p className="text-blue-800 text-sm">
-                    💡 No te preocupes, puedes hacer la simulación sin tener el vehículo específico. 
-                    Los datos del vehículo son opcionales para obtener tu cotización.
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Información del Vehículo para Agencias */}
-          {isHydrated && isAgency && (
-            <div className="bg-blue-50 border border-blue-200 rounded-2xl p-6 space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-blue-800 flex items-center">
-                  <Car className="w-5 h-5 mr-2" />
-                  Información del Vehículo
-                </h3>
-                <label className="flex items-center space-x-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={noVehicleYet}
-                    onChange={(e) => {
-                      setNoVehicleYet(e.target.checked);
-                      setValue("no_vehicle_yet", e.target.checked);
-                    }}
-                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                  />
-                  <span className="text-gray-600">No tiene vehículo aún</span>
-                </label>
-              </div>
-              
-              <div className={`grid grid-cols-1 md:grid-cols-3 gap-4 ${noVehicleYet ? 'opacity-50 pointer-events-none' : ''}`}>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Marca
-                  </label>
-                  <input
-                    type="text"
-                    disabled={noVehicleYet}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-2xl focus:ring-4 focus:ring-blue-300/50 focus:border-blue-400 disabled:bg-gray-100"
-                    placeholder="Toyota, Honda, Nissan..."
-                    {...register("vehicle_brand")}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Modelo
-                  </label>
-                  <input
-                    type="text"
-                    disabled={noVehicleYet}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-2xl focus:ring-4 focus:ring-blue-300/50 focus:border-blue-400 disabled:bg-gray-100"
-                    placeholder="Corolla, Civic, Sentra..."
-                    {...register("vehicle_model")}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Año
-                  </label>
-                  <input
-                    type="number"
-                    disabled={noVehicleYet}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-2xl focus:ring-4 focus:ring-blue-300/50 focus:border-blue-400 disabled:bg-gray-100"
-                    placeholder="2024"
-                    {...register("vehicle_year")}
-                  />
-                </div>
-              </div>
-
-              {noVehicleYet && (
-                <div className="bg-blue-100 border border-blue-300 rounded-xl p-4">
-                  <p className="text-blue-800 text-sm">
-                    💡 El cliente puede hacer la simulación sin tener el vehículo específico. 
-                    Los datos del vehículo son opcionales para obtener la cotización.
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
-
-          {/* Información del Vehículo para Asesores */}
-          {isHydrated && isAsesor && (
-            <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-6 space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-emerald-800 flex items-center">
-                  <Car className="w-5 h-5 mr-2" />
-                  Información del Vehículo
-                </h3>
-                <label className="flex items-center space-x-2 text-sm">
-                  <input
-                    type="checkbox"
-                    checked={noVehicleYet}
-                    onChange={(e) => {
-                      setNoVehicleYet(e.target.checked);
-                      setValue("no_vehicle_yet", e.target.checked);
-                    }}
-                    className="rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
-                  />
-                  <span className="text-gray-600">No tiene vehículo aún</span>
-                </label>
-              </div>
-
-              <div className={`grid grid-cols-1 md:grid-cols-3 gap-4 ${noVehicleYet ? 'opacity-50 pointer-events-none' : ''}`}>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Marca
-                  </label>
-                  <input
-                    type="text"
-                    disabled={noVehicleYet}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-2xl focus:ring-4 focus:ring-emerald-300/50 focus:border-emerald-400 disabled:bg-gray-100"
-                    placeholder="Toyota, Honda, Nissan..."
-                    {...register("vehicle_brand")}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Modelo
-                  </label>
-                  <input
-                    type="text"
-                    disabled={noVehicleYet}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-2xl focus:ring-4 focus:ring-emerald-300/50 focus:border-emerald-400 disabled:bg-gray-100"
-                    placeholder="Corolla, Civic, Sentra..."
-                    {...register("vehicle_model")}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Año
-                  </label>
-                  <input
-                    type="number"
-                    disabled={noVehicleYet}
-                    className="w-full px-4 py-3 border border-gray-300 rounded-2xl focus:ring-4 focus:ring-emerald-300/50 focus:border-emerald-400 disabled:bg-gray-100"
-                    placeholder="2024"
-                    {...register("vehicle_year")}
-                  />
-                </div>
-              </div>
-
-              {noVehicleYet && (
-                <div className="bg-emerald-100 border border-emerald-300 rounded-xl p-4">
-                  <p className="text-emerald-800 text-sm">
-                    💡 No te preocupes, puedes hacer la simulación sin tener el vehículo específico.
-                    Los datos del vehículo son opcionales para obtener la cotización.
-                  </p>
-                </div>
-              )}
             </div>
           )}
 
@@ -623,7 +703,7 @@ export function EnhancedQuoteForm({ onSubmit, isSubmitting, hasResults = false }
             {errors.vehicle_value && (
               <p className="text-red-600 text-sm flex items-center">
                 <Info className="w-4 h-4 mr-1" />
-                {String(errors.vehicle_value.message)}
+                {errors.vehicle_value.message}
               </p>
             )}
           </div>
@@ -791,36 +871,38 @@ export function EnhancedQuoteForm({ onSubmit, isSubmitting, hasResults = false }
           </div>
 
           {/* Checkbox de Autorización de Privacidad - Solo para clientes */}
-          {isHydrated && isClient && (
-            <div className="bg-gray-50 border border-gray-200 rounded-2xl p-6">
+          {isClient && (
+            <div className="bg-yellow-50 border border-yellow-200 rounded-2xl p-6">
               <label className="flex items-start space-x-3 cursor-pointer">
                 <input
                   type="checkbox"
                   className="mt-1 rounded border-gray-300 text-emerald-600 focus:ring-emerald-500"
-                  {...register("privacy_consent")}
+                  {...register("privacy_consent" as any)}
                 />
-                <div className="text-sm text-gray-700">
-                  <span className="font-medium">Autorizo a Fincentiva</span> a recopilar y utilizar mi información personal de acuerdo con su{" "}
-                  <a 
-                    href="/politica-privacidad" 
-                    target="_blank" 
-                    className="text-emerald-600 hover:text-emerald-700 underline"
-                  >
-                    política de privacidad
-                  </a>
-                  . *
+                <div className="flex-1">
+                  <span className="text-sm text-gray-700">
+                    <strong>Autorizo a Fincentiva</strong> a recopilar y utilizar mi información personal de acuerdo con su{" "}
+                    <a 
+                      href="/politica-privacidad" 
+                      target="_blank" 
+                      className="text-emerald-600 hover:text-emerald-700 underline"
+                    >
+                      política de privacidad
+                    </a>
+                    . Esta autorización es necesaria para procesar tu solicitud de crédito.
+                  </span>
+                  {(errors as any).privacy_consent && (
+                    <p className="text-red-600 text-xs mt-1">{(errors as any).privacy_consent.message}</p>
+                  )}
                 </div>
               </label>
-              {errors.privacy_consent && (
-                <p className="text-red-600 text-sm mt-2 ml-6">{String(errors.privacy_consent.message)}</p>
-              )}
             </div>
           )}
 
           {/* Submit Button */}
           <button
             type="submit"
-            disabled={isSubmitting}
+            disabled={isSubmitting || (isClient && !privacyConsent)}
             className={cn(
               "w-full py-4 md:py-5 px-6 md:px-8 rounded-2xl font-bold text-base md:text-lg text-white",
               "bg-gradient-to-r from-emerald-500 via-emerald-600 to-cyan-600",

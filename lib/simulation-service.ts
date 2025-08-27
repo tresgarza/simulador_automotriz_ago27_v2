@@ -285,7 +285,7 @@ export class SimulationService {
         'Monto Financiado'
       ]
 
-      const rows = data?.map((sim: SimulationWithQuote) => [
+      const rows = data?.map((sim: any) => [
         sim.id,
         new Date(sim.calculated_at).toLocaleDateString(),
         sim.z_auto_quotes?.client_name || '',

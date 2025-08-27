@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { useForm, useFieldArray } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -7,8 +7,8 @@ import {
   X, User, Car, DollarSign, Building2, FileCheck, Plus, Minus,
   Calculator, TrendingUp, TrendingDown, Banknote, CreditCard, PiggyBank
 } from "lucide-react";
-import { formatMXN, cn } from "@/lib/utils";
-import { supabase } from "../../../../lib/supabase";
+import { formatMXN, cn } from "../../lib/utils";
+import { supabase } from "../../lib/supabase";
 
 // Schema para el formulario de autorización
 const AuthorizationSchema = z.object({
@@ -98,15 +98,15 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
     resolver: zodResolver(AuthorizationSchema),
     defaultValues: {
       // Pre-llenar con datos de la simulación
-      applicant_name: request.simulation.quote.client_name || "",
-      requested_amount: request.simulation.quote.vehicle_value || 0,
-      term_months: request.simulation.term_months || 48,
-      interest_rate: request.simulation.annual_rate * 100 || 45,
+      applicant_name: request.simulation?.quote?.client_name || "",
+      requested_amount: request.simulation?.quote?.vehicle_value || 0,
+      term_months: request.simulation?.term_months || 48,
+      interest_rate: (request.simulation?.annual_rate || 0.45) * 100,
       opening_fee: 3, // 3% por defecto
-      vehicle_brand: request.simulation.quote.vehicle_brand || "",
-      vehicle_model: request.simulation.quote.vehicle_model || "",
-      vehicle_year: request.simulation.quote.vehicle_year || new Date().getFullYear(),
-      sale_value: request.simulation.quote.vehicle_value || 0,
+      vehicle_brand: request.simulation?.quote?.vehicle_brand || "",
+      vehicle_model: request.simulation?.quote?.vehicle_model || "",
+      vehicle_year: request.simulation?.quote?.vehicle_year || new Date().getFullYear(),
+      sale_value: request.simulation?.quote?.vehicle_value || 0,
       incomes: [{ type: "nomina", period: "", amount: 0 }],
       commitments: 0,
       personal_expenses: 0,
@@ -178,7 +178,7 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
                 Formulario de Autorización
               </h2>
               <p className="text-emerald-100 mt-1">
-                Solicitud de {request.simulation.quote.client_name || 'Cliente Anónimo'}
+                Solicitud de {request.simulation?.quote?.client_name || 'Cliente Anónimo'}
               </p>
             </div>
             <button

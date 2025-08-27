@@ -39,7 +39,7 @@ export class AuthService {
       localStorage.setItem('auth_user', JSON.stringify(authUser))
       
       return { user: authUser, error: null }
-    } catch {
+    } catch (err) {
       return { user: null, error: 'Error al iniciar sesión' }
     }
   }
@@ -69,7 +69,7 @@ export class AuthService {
       localStorage.setItem('auth_user', JSON.stringify(authUser))
       
       return { user: authUser, error: null }
-    } catch {
+    } catch (err) {
       return { user: null, error: 'Error al iniciar sesión' }
     }
   }
