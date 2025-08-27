@@ -1,0 +1,54 @@
+# A string used to distinguish different Supabase projects on the same host. Defaults to the
+# working directory name when running `supabase init`.
+project_id = "sibiwavhwnxtrszjgqti"
+
+[api]
+enabled = true
+port = 54321
+schemas = ["public", "graphql_public"]
+extra_search_path = ["public", "extensions"]
+max_rows = 1000
+
+[auth]
+enabled = true
+site_url = "http://localhost:3000"
+additional_redirect_urls = ["https://localhost:3000"]
+jwt_expiry = 3600
+enable_signup = true
+enable_anonymous_sign_ins = true
+
+[auth.email]
+enable_signup = true
+double_confirm_changes = true
+enable_confirmations = true
+
+[db]
+port = 54322
+shadow_port = 54320
+major_version = 15
+
+[studio]
+enabled = true
+port = 54323
+
+# Email testing server. Emails sent with the local dev setup are not actually sent - rather, they
+# are monitored, and you can view the emails that would have been sent from the web interface.
+[inbucket]
+enabled = true
+port = 54324
+# Port to use for the email testing server web interface.
+smtp_port = 2500
+pop3_port = 1100
+
+[storage]
+enabled = true
+file_size_limit = "50MiB"
+
+
+
+[analytics]
+enabled = false
+port = 54325
+vector_port = 54326
+# Configure one of the supported backends: `postgres`, `clickhouse`.
+backend = "postgres"

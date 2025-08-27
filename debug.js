@@ -21,3 +21,6 @@ const interest5 = principal * (tan / 360) * days5;
 console.log('Interest with 4 days:', interest4);
 console.log('Interest with 5 days:', interest5);
 console.log('Test shows:', 1775.81);
+
+
+

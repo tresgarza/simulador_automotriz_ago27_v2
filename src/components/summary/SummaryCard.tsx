@@ -1,11 +1,6 @@
 "use client";
-import { PDFDownloadLink } from "@react-pdf/renderer";
-import { Download, FileText, Share2 } from "lucide-react";
-import { Button } from "@/components/ui/button";
-import { CaratulaPDF } from "@/pdf/Caratula";
-import { exportScheduleXLSX } from "@/csv/export";
-import { formatMXN } from "@/lib/utils";
-import { brand } from "@/styles/theme";
+import { Calculator } from "lucide-react";
+import { PlansMatrix } from "./PlansMatrix";
 
 type ApiResult = {
   summary: {
@@ -41,176 +36,82 @@ type ComparativeResult = {
   C: ApiResult;
 };
 
+type Term = 24 | 36 | 48 | 60;
+type MatrixResult = {
+  A: Record<Term, ApiResult>;
+  B: Record<Term, ApiResult>;
+  C: Record<Term, ApiResult>;
+};
+
 interface SummaryCardProps {
-  result: ApiResult | ComparativeResult | null;
+  result: ApiResult | ComparativeResult | MatrixResult | null;
   isComparative?: boolean;
+  vehicleValue?: number;
+  downPayment?: number;
+  insuranceAmount?: number;
+  insuranceMode?: string;
+  commissionMode?: string;
+  // Datos del cliente
+  clientName?: string;
+  clientPhone?: string;
+  clientEmail?: string;
+  // Datos del vehículo
+  vehicleBrand?: string;
+  vehicleModel?: string;
+  vehicleYear?: number;
+  // Datos del vendedor/agencia
+  vendorName?: string;
+  dealerAgency?: string;
 }
 
-export function SummaryCard({ result, isComparative = false }: SummaryCardProps) {
+export function SummaryCard({ 
+  result, 
+  isComparative = false, 
+  vehicleValue, 
+  downPayment, 
+  insuranceAmount, 
+  insuranceMode, 
+  commissionMode,
+  clientName,
+  clientPhone,
+  clientEmail,
+  vehicleBrand,
+  vehicleModel,
+  vehicleYear,
+  vendorName,
+  dealerAgency
+}: SummaryCardProps) {
   if (!result) {
     return (
-      <div className="bg-white rounded-xl p-6 shadow-lg space-y-4">
-        <h2 className="text-xl font-bold" style={{ color: brand.primary }}>
-          Resumen
-        </h2>
-        <p className="text-gray-600">
-          Completa el formulario para ver tu pago estimado.
-        </p>
+      <div className="backdrop-blur-xl bg-white/20 border border-white/30 rounded-3xl p-8 shadow-2xl">
+        <div className="text-center">
+          <div className="inline-flex items-center justify-center w-16 h-16 bg-gradient-to-br from-emerald-400 to-cyan-500 rounded-2xl mb-4 shadow-lg">
+            <Calculator className="w-8 h-8 text-white" />
+          </div>
+          <h2 className="text-2xl font-bold text-white mb-2">Tus Planes</h2>
+          <p className="text-white/80">Completa el formulario para ver todos los planes disponibles</p>
+        </div>
       </div>
     );
   }
 
-  if (isComparative && "A" in result) {
-    return <ComparativeCards result={result} />;
-  }
-
-  const singleResult = result as ApiResult;
-  
-  const handleExportXLSX = () => {
-    const rows = singleResult.schedule.map((row) => ({
-      Periodo: row.k,
-      Fecha: row.date,
-      "Saldo Inicial": row.saldo_ini,
-      "Interés": row.interes,
-      "IVA Interés": row.iva_interes,
-      Capital: row.capital,
-      "PMT Base": row.pmt,
-      "Renta GPS": row.gps_rent,
-      "IVA GPS": row.gps_rent_iva,
-      "Pago Total": row.pago_total,
-      "Saldo Final": row.saldo_fin,
-    }));
-    exportScheduleXLSX(rows);
-  };
-
-  const handleCopyJSON = () => {
-    navigator.clipboard.writeText(JSON.stringify(singleResult, null, 2));
-  };
-
+  // Always show matrix now - we compute all plans by default
   return (
-    <div className="bg-white rounded-xl p-6 shadow-lg space-y-4">
-      <h2 className="text-xl font-bold" style={{ color: brand.primary }}>
-        Resumen
-      </h2>
-      
-      <div className="space-y-3">
-        <div className="text-center">
-          <div className="text-4xl font-extrabold text-gray-900">
-            {formatMXN(singleResult.summary.pmt_total_month2)}
-          </div>
-          <div className="text-gray-600">Pago estimado (mes 2)</div>
-        </div>
-
-        <div className="pt-4 border-t space-y-2 text-sm">
-          <div className="flex justify-between">
-            <span className="text-gray-600">Monto financiado</span>
-            <span className="font-medium">{formatMXN(singleResult.summary.principal_total)}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-gray-600">Desembolso inicial</span>
-            <span className="font-medium">{formatMXN(singleResult.summary.initial_outlay)}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-gray-600">Primer pago</span>
-            <span className="font-medium">{singleResult.summary.first_payment_date}</span>
-          </div>
-          <div className="flex justify-between">
-            <span className="text-gray-600">Último pago</span>
-            <span className="font-medium">{singleResult.summary.last_payment_date}</span>
-          </div>
-        </div>
-
-        <div className="pt-4 space-y-2">
-          <PDFDownloadLink 
-            document={<CaratulaPDF summary={singleResult.summary} />} 
-            fileName="caratula.pdf"
-          >
-            {({ loading }) => (
-              <Button
-                variant="outline"
-                className="w-full"
-                disabled={loading}
-              >
-                <FileText className="w-4 h-4 mr-2" />
-                {loading ? "Generando PDF..." : "Descargar Carátula PDF"}
-              </Button>
-            )}
-          </PDFDownloadLink>
-
-          <Button
-            variant="outline"
-            className="w-full"
-            onClick={handleExportXLSX}
-          >
-            <Download className="w-4 h-4 mr-2" />
-            Descargar Tabla XLSX
-          </Button>
-
-          <Button
-            variant="outline"
-            className="w-full"
-            onClick={handleCopyJSON}
-          >
-            <Share2 className="w-4 h-4 mr-2" />
-            Copiar JSON
-          </Button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function ComparativeCards({ result }: { result: ComparativeResult }) {
-  const tiers = [
-    { key: "A", label: "Nivel A", rate: "36%", color: "#10B981" },
-    { key: "B", label: "Nivel B", rate: "40%", color: "#F59E0B" },
-    { key: "C", label: "Nivel C", rate: "45%", color: "#EF4444" },
-  ] as const;
-
-  return (
-    <div className="space-y-4">
-      <h2 className="text-xl font-bold" style={{ color: brand.primary }}>
-        Comparación de Niveles
-      </h2>
-      
-      <div className="grid grid-cols-1 gap-4">
-        {tiers.map((tier) => {
-          const tierResult = result[tier.key];
-          return (
-            <div
-              key={tier.key}
-              className="bg-white rounded-lg border-2 p-4"
-              style={{ borderColor: tier.color }}
-            >
-              <div className="flex justify-between items-center mb-2">
-                <div>
-                  <h3 className="font-semibold" style={{ color: tier.color }}>
-                    {tier.label}
-                  </h3>
-                  <p className="text-xs text-gray-600">TAN {tier.rate}</p>
-                </div>
-                <div className="text-right">
-                  <div className="text-2xl font-bold" data-testid={`nivel-${tier.key.toLowerCase()}-payment`}>
-                    {formatMXN(tierResult.summary.pmt_total_month2)}
-                  </div>
-                  <div className="text-xs text-gray-600">Pago mes 2</div>
-                </div>
-              </div>
-              
-              <div className="grid grid-cols-2 gap-2 text-xs">
-                <div>
-                  <span className="text-gray-600">PMT base: </span>
-                  <span>{formatMXN(tierResult.summary.pmt_base)}</span>
-                </div>
-                <div>
-                  <span className="text-gray-600">Desembolso: </span>
-                  <span>{formatMXN(tierResult.summary.initial_outlay)}</span>
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
+    <PlansMatrix 
+      result={result as MatrixResult} 
+      vehicleValue={vehicleValue}
+      downPayment={downPayment}
+      insuranceAmount={insuranceAmount}
+      insuranceMode={insuranceMode}
+      commissionMode={commissionMode}
+      clientName={clientName}
+      clientPhone={clientPhone}
+      clientEmail={clientEmail}
+      vehicleBrand={vehicleBrand}
+      vehicleModel={vehicleModel}
+      vehicleYear={vehicleYear}
+      vendorName={vendorName}
+      dealerAgency={dealerAgency}
+    />
   );
 }

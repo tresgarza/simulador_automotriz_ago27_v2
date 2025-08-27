@@ -29,3 +29,6 @@ services:
       - simulador
     restart: unless-stopped
     profiles: ["production"]
+
+
+

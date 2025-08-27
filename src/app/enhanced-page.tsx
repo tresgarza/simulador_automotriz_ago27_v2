@@ -5,9 +5,8 @@ import { EnhancedQuoteForm, type EnhancedFormData } from "@/components/form/Enha
 import { SummaryCard } from "@/components/summary/SummaryCard";
 import { LoginModal } from "@/components/auth/LoginModal";
 import { UserMenu } from "@/components/auth/UserMenu";
-import { AsesorDashboard } from "@/components/dashboard/AsesorDashboard";
 import { useAuth } from "../../lib/auth";
-import { LogIn, User, BarChart3 } from "lucide-react";
+import { LogIn, User } from "lucide-react";
 
 type ApiResult = {
   summary: {
@@ -44,22 +43,15 @@ type MatrixResult = {
   C: Record<Term, ApiResult>;
 };
 
-export default function Home() {
+export default function EnhancedHome() {
   const [result, setResult] = useState<MatrixResult | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showResults, setShowResults] = useState(false);
   const [formData, setFormData] = useState<EnhancedFormData | null>(null);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [currentQuoteId, setCurrentQuoteId] = useState<string | null>(null);
-  const [showDashboard, setShowDashboard] = useState(false);
-  const [isClient, setIsClient] = useState(false);
 
-  const { user, isLoggedIn, isAsesor, isAgency, isClient: authIsClient, getAvailableRates } = useAuth();
-
-  // Evitar problemas de hidratación
-  useEffect(() => {
-    setIsClient(true);
-  }, []);
+  const { user, isLoggedIn, isAsesor, isAgency, isClient, getAvailableRates } = useAuth();
 
   const getRateForTier = (tier: string): number => {
     switch (tier) {
@@ -92,7 +84,7 @@ export default function Home() {
         clientName: data.client_name,
         clientEmail: data.client_email,
         clientPhone: data.client_phone,
-        agencyId: null, // Por ahora null, necesitamos obtener el agency_id real
+        agencyId: user?.user_type === 'agency' ? user.id : null,
         promoterCode: data.promoter_code,
         vendorName: data.vendor_name,
         originProcedencia: data.origin_procedencia,
@@ -114,7 +106,7 @@ export default function Home() {
         commissionMode: data.commission_mode,
         
         // Metadata
-        ipAddress: null,
+        ipAddress: null, // Se puede obtener del servidor
         userAgent: typeof window !== 'undefined' ? navigator.userAgent : null
       };
 
@@ -269,26 +261,6 @@ export default function Home() {
 
   const gradient = useMemo(() => ({ background: brand.gradient }), []);
 
-  // Mostrar dashboard si es asesor y está en modo dashboard
-  if (showDashboard && isAsesor) {
-    return (
-      <div className="min-h-screen bg-gray-50">
-        <div className="bg-white shadow-sm border-b border-gray-200 p-4">
-          <div className="max-w-7xl mx-auto flex items-center justify-between">
-            <button
-              onClick={() => setShowDashboard(false)}
-              className="flex items-center text-gray-600 hover:text-gray-900"
-            >
-              ← Volver al Simulador
-            </button>
-            <UserMenu />
-          </div>
-        </div>
-        <AsesorDashboard />
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen relative overflow-hidden" style={gradient}>
       {/* Background Elements */}
@@ -305,19 +277,8 @@ export default function Home() {
           <div className="flex justify-between items-center mb-8">
             <div></div> {/* Spacer */}
             <div className="flex items-center space-x-4">
-              {isClient && isLoggedIn ? (
-                <div className="flex items-center space-x-4">
-                  {isAsesor && (
-                    <button
-                      onClick={() => setShowDashboard(true)}
-                      className="flex items-center space-x-2 bg-white/10 backdrop-blur border border-white/20 rounded-2xl px-4 py-2 text-white hover:bg-white/20 transition-all"
-                    >
-                      <BarChart3 className="w-4 h-4" />
-                      <span>Dashboard</span>
-                    </button>
-                  )}
-                  <UserMenu />
-                </div>
+              {isLoggedIn ? (
+                <UserMenu />
               ) : (
                 <button
                   onClick={() => setShowLoginModal(true)}
@@ -343,14 +304,14 @@ export default function Home() {
             Simula tu Crédito Automotriz
           </h1>
           <p className="text-xl opacity-90 max-w-2xl mx-auto">
-            {!isClient || authIsClient 
+            {isClient 
               ? "Encuentra el plan perfecto para ti con las mejores tasas del mercado"
               : `Panel ${isAsesor ? "de Asesor" : "de Agencia"} - Gestiona cotizaciones profesionales`
             }
           </p>
 
           {/* Indicador de usuario actual */}
-          {isClient && isLoggedIn && (
+          {isLoggedIn && (
             <div className="mt-4 inline-flex items-center px-4 py-2 bg-white/10 backdrop-blur border border-white/20 rounded-2xl text-white">
               <User className="w-4 h-4 mr-2" />
               <span className="text-sm">
@@ -370,7 +331,7 @@ export default function Home() {
             <EnhancedQuoteForm onSubmit={onSubmit} isSubmitting={isSubmitting} hasResults={showResults} />
           </div>
 
-          {/* Results Section - Slides in from right */}
+          {/* Results Section */}
           <div className={`transition-all duration-700 ${
             showResults 
               ? 'opacity-100 transform translate-x-0' 
@@ -384,14 +345,6 @@ export default function Home() {
               insuranceAmount={formData?.insurance_amount}
               insuranceMode={formData?.insurance_mode}
               commissionMode={formData?.commission_mode}
-              clientName={formData?.client_name}
-              clientPhone={formData?.client_phone}
-              clientEmail={formData?.client_email}
-              vehicleBrand={formData?.vehicle_brand}
-              vehicleModel={formData?.vehicle_model}
-              vehicleYear={formData?.vehicle_year}
-              vendorName={formData?.vendor_name}
-              dealerAgency={formData?.dealer_agency}
             />
           </div>
         </div>
@@ -417,3 +370,4 @@ export default function Home() {
     </div>
   );
 }
+

@@ -1,0 +1,424 @@
+-- =========================================
+-- BASE DE DATOS: SIMULADOR AUTOMOTRIZ
+-- Proyecto: ydnygntfkrleiseuciwq
+-- Prefijo de tablas: z_auto_
+-- =========================================
+
+-- 1. TABLA DE USUARIOS Y ROLES
+CREATE TABLE IF NOT EXISTS z_auto_users (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    email VARCHAR(255) UNIQUE,
+    phone VARCHAR(20),
+    name VARCHAR(255),
+    user_type VARCHAR(20) CHECK (user_type IN ('client', 'agency', 'asesor')),
+    agency_code VARCHAR(50), -- Solo para agencias
+    agency_name VARCHAR(255), -- Solo para agencias
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- 2. TABLA DE AGENCIAS
+CREATE TABLE IF NOT EXISTS z_auto_agencies (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    agency_code VARCHAR(50) UNIQUE NOT NULL,
+    name VARCHAR(255) NOT NULL,
+    contact_email VARCHAR(255),
+    contact_phone VARCHAR(20),
+    address TEXT,
+    city VARCHAR(100),
+    state VARCHAR(100),
+    postal_code VARCHAR(10),
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- 3. TABLA DE TASAS DE INTERÉS
+CREATE TABLE IF NOT EXISTS z_auto_rate_tiers (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    tier_code VARCHAR(5) UNIQUE NOT NULL, -- A, B, C
+    tier_name VARCHAR(100) NOT NULL,
+    annual_rate DECIMAL(5,4) NOT NULL, -- 0.3600 = 36%
+    annual_rate_with_iva DECIMAL(5,4) NOT NULL, -- 0.4176 = 41.76%
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- 4. TABLA DE COTIZACIONES
+CREATE TABLE IF NOT EXISTS z_auto_quotes (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id UUID REFERENCES z_auto_users(id),
+    session_id VARCHAR(255), -- Para clientes sin login
+    client_name VARCHAR(255),
+    client_email VARCHAR(255),
+    client_phone VARCHAR(20),
+    agency_id UUID REFERENCES z_auto_agencies(id),
+    promoter_code VARCHAR(50),
+    vendor_name VARCHAR(255),
+    origin_procedencia VARCHAR(255),
+
+    -- Datos del vehículo
+    vehicle_brand VARCHAR(100),
+    vehicle_model VARCHAR(100),
+    vehicle_year INTEGER,
+    vehicle_type VARCHAR(50),
+    vehicle_usage VARCHAR(50),
+    vehicle_origin VARCHAR(50),
+    serial_number VARCHAR(100),
+    vehicle_value DECIMAL(12,2) NOT NULL,
+
+    -- Datos del crédito
+    down_payment_amount DECIMAL(12,2) NOT NULL,
+    insurance_mode VARCHAR(10) CHECK (insurance_mode IN ('cash', 'financed')),
+    insurance_amount DECIMAL(12,2) NOT NULL,
+    commission_mode VARCHAR(10) CHECK (commission_mode IN ('cash', 'financed')),
+
+    -- Parámetros de cálculo
+    opening_fee_percentage DECIMAL(5,4) DEFAULT 0.03, -- 3%
+    gps_monthly DECIMAL(8,2) DEFAULT 400.00,
+    life_insurance_monthly DECIMAL(8,2) DEFAULT 300.00,
+    iva_rate DECIMAL(5,4) DEFAULT 0.16, -- 16%
+
+    -- Metadata
+    ip_address INET,
+    user_agent TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- 5. TABLA DE SIMULACIONES COMPLETAS
+CREATE TABLE IF NOT EXISTS z_auto_simulations (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    quote_id UUID REFERENCES z_auto_quotes(id) ON DELETE CASCADE,
+    tier_code VARCHAR(5) NOT NULL, -- A, B, C
+    term_months INTEGER NOT NULL CHECK (term_months IN (24, 36, 48, 60)),
+
+    -- Resultados del resumen
+    financed_amount DECIMAL(12,2) NOT NULL,
+    opening_fee DECIMAL(12,2) NOT NULL,
+    opening_fee_iva DECIMAL(12,2) NOT NULL,
+    total_to_finance DECIMAL(12,2) NOT NULL,
+    monthly_payment DECIMAL(12,2) NOT NULL,
+    initial_outlay DECIMAL(12,2) NOT NULL,
+    pmt_base DECIMAL(12,2) NOT NULL,
+    pmt_total_month2 DECIMAL(12,2) NOT NULL,
+
+    -- Fechas calculadas
+    first_payment_date DATE NOT NULL,
+    last_payment_date DATE NOT NULL,
+
+    -- JSON con la tabla completa de amortización
+    amortization_schedule JSONB,
+
+    -- Metadata
+    calculated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    calculation_version VARCHAR(20) DEFAULT '1.0'
+);
+
+-- 6. TABLA DE PDFs GENERADOS
+CREATE TABLE IF NOT EXISTS z_auto_pdfs_generated (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    simulation_id UUID REFERENCES z_auto_simulations(id) ON DELETE CASCADE,
+    quote_id UUID REFERENCES z_auto_quotes(id) ON DELETE CASCADE,
+    file_name VARCHAR(255) NOT NULL,
+    file_url TEXT,
+    file_size_bytes INTEGER,
+    generated_by_user_id UUID REFERENCES z_auto_users(id),
+    ip_address INET,
+    user_agent TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- 7. TABLA DE AUDITORÍA
+CREATE TABLE IF NOT EXISTS z_auto_audit_logs (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    table_name VARCHAR(100) NOT NULL,
+    record_id UUID NOT NULL,
+    action VARCHAR(20) NOT NULL CHECK (action IN ('INSERT', 'UPDATE', 'DELETE')),
+    old_values JSONB,
+    new_values JSONB,
+    user_id UUID REFERENCES z_auto_users(id),
+    ip_address INET,
+    user_agent TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- 8. TABLA DE CONFIGURACIÓN DEL SISTEMA
+CREATE TABLE IF NOT EXISTS z_auto_system_config (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    config_key VARCHAR(100) UNIQUE NOT NULL,
+    config_value JSONB NOT NULL,
+    description TEXT,
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- =========================================
+-- ÍNDICES PARA OPTIMIZACIÓN
+-- =========================================
+
+-- Índices para z_auto_users
+CREATE INDEX IF NOT EXISTS idx_z_auto_users_email ON z_auto_users(email);
+CREATE INDEX IF NOT EXISTS idx_z_auto_users_phone ON z_auto_users(phone);
+CREATE INDEX IF NOT EXISTS idx_z_auto_users_agency_code ON z_auto_users(agency_code);
+CREATE INDEX IF NOT EXISTS idx_z_auto_users_type ON z_auto_users(user_type);
+
+-- Índices para z_auto_quotes
+CREATE INDEX IF NOT EXISTS idx_z_auto_quotes_user_id ON z_auto_quotes(user_id);
+CREATE INDEX IF NOT EXISTS idx_z_auto_quotes_session_id ON z_auto_quotes(session_id);
+CREATE INDEX IF NOT EXISTS idx_z_auto_quotes_agency_id ON z_auto_quotes(agency_id);
+CREATE INDEX IF NOT EXISTS idx_z_auto_quotes_created_at ON z_auto_quotes(created_at);
+
+-- Índices para z_auto_simulations
+CREATE INDEX IF NOT EXISTS idx_z_auto_simulations_quote_id ON z_auto_simulations(quote_id);
+CREATE INDEX IF NOT EXISTS idx_z_auto_simulations_tier_term ON z_auto_simulations(tier_code, term_months);
+
+-- Índices para z_auto_audit_logs
+CREATE INDEX IF NOT EXISTS idx_z_auto_audit_logs_table_record ON z_auto_audit_logs(table_name, record_id);
+CREATE INDEX IF NOT EXISTS idx_z_auto_audit_logs_created_at ON z_auto_audit_logs(created_at);
+
+-- =========================================
+-- DATOS INICIALES
+-- =========================================
+
+-- Insertar tasas de interés
+INSERT INTO z_auto_rate_tiers (tier_code, tier_name, annual_rate, annual_rate_with_iva)
+VALUES
+    ('A', 'Tasa A - 36%', 0.3600, 0.4176),
+    ('B', 'Tasa B - 40%', 0.4000, 0.4640),
+    ('C', 'Tasa C - 45%', 0.4500, 0.5220)
+ON CONFLICT (tier_code) DO NOTHING;
+
+-- Configuración del sistema
+INSERT INTO z_auto_system_config (config_key, config_value, description)
+VALUES
+    ('default_opening_fee_percentage', '0.03', 'Porcentaje de comisión por apertura (3%)'),
+    ('default_gps_monthly', '400.00', 'Costo mensual GPS por defecto'),
+    ('default_life_insurance_monthly', '300.00', 'Costo mensual seguro de vida por defecto'),
+    ('default_iva_rate', '0.16', 'Tasa de IVA por defecto (16%)'),
+    ('min_down_payment_percentage', '0.30', 'Enganche mínimo (30%)'),
+    ('available_terms', '[24, 36, 48, 60]', 'Plazos disponibles en meses')
+ON CONFLICT (config_key) DO NOTHING;
+
+-- =========================================
+-- FUNCIONES Y TRIGGERS
+-- =========================================
+
+-- Función para actualizar updated_at automáticamente
+CREATE OR REPLACE FUNCTION update_updated_at_column()
+RETURNS TRIGGER AS $$
+BEGIN
+    NEW.updated_at = NOW();
+    RETURN NEW;
+END;
+$$ language 'plpgsql';
+
+-- Aplicar trigger de updated_at a las tablas que lo necesitan
+DROP TRIGGER IF EXISTS update_z_auto_users_updated_at ON z_auto_users;
+CREATE TRIGGER update_z_auto_users_updated_at
+    BEFORE UPDATE ON z_auto_users
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS update_z_auto_agencies_updated_at ON z_auto_agencies;
+CREATE TRIGGER update_z_auto_agencies_updated_at
+    BEFORE UPDATE ON z_auto_agencies
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS update_z_auto_quotes_updated_at ON z_auto_quotes;
+CREATE TRIGGER update_z_auto_quotes_updated_at
+    BEFORE UPDATE ON z_auto_quotes
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+DROP TRIGGER IF EXISTS update_z_auto_system_config_updated_at ON z_auto_system_config;
+CREATE TRIGGER update_z_auto_system_config_updated_at
+    BEFORE UPDATE ON z_auto_system_config
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+-- Función de auditoría
+CREATE OR REPLACE FUNCTION audit_trigger_function()
+RETURNS TRIGGER AS $$
+DECLARE
+    old_row JSONB;
+    new_row JSONB;
+    action_type VARCHAR(20);
+BEGIN
+    IF TG_OP = 'DELETE' THEN
+        old_row := row_to_json(OLD)::JSONB;
+        new_row := NULL;
+        action_type := 'DELETE';
+    ELSIF TG_OP = 'UPDATE' THEN
+        old_row := row_to_json(OLD)::JSONB;
+        new_row := row_to_json(NEW)::JSONB;
+        action_type := 'UPDATE';
+    ELSIF TG_OP = 'INSERT' THEN
+        old_row := NULL;
+        new_row := row_to_json(NEW)::JSONB;
+        action_type := 'INSERT';
+    END IF;
+
+    INSERT INTO z_auto_audit_logs (
+        table_name,
+        record_id,
+        action,
+        old_values,
+        new_values,
+        user_id
+    ) VALUES (
+        TG_TABLE_NAME,
+        COALESCE(NEW.id, OLD.id),
+        action_type,
+        old_row,
+        new_row,
+        NULL -- TODO: Obtener del contexto de sesión
+    );
+
+    IF TG_OP = 'DELETE' THEN
+        RETURN OLD;
+    ELSE
+        RETURN NEW;
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Aplicar triggers de auditoría a tablas importantes
+DROP TRIGGER IF EXISTS audit_z_auto_users ON z_auto_users;
+CREATE TRIGGER audit_z_auto_users
+    AFTER INSERT OR UPDATE OR DELETE ON z_auto_users
+    FOR EACH ROW EXECUTE FUNCTION audit_trigger_function();
+
+DROP TRIGGER IF EXISTS audit_z_auto_quotes ON z_auto_quotes;
+CREATE TRIGGER audit_z_auto_quotes
+    AFTER INSERT OR UPDATE OR DELETE ON z_auto_quotes
+    FOR EACH ROW EXECUTE FUNCTION audit_trigger_function();
+
+DROP TRIGGER IF EXISTS audit_z_auto_simulations ON z_auto_simulations;
+CREATE TRIGGER audit_z_auto_simulations
+    AFTER INSERT OR UPDATE OR DELETE ON z_auto_simulations
+    FOR EACH ROW EXECUTE FUNCTION audit_trigger_function();
+
+-- =========================================
+-- VISTAS ÚTILES
+-- =========================================
+
+-- Vista de estadísticas de uso
+CREATE OR REPLACE VIEW z_auto_usage_stats AS
+SELECT
+    DATE_TRUNC('day', q.created_at) as date,
+    u.user_type,
+    COUNT(*) as quotes_count,
+    COUNT(DISTINCT q.user_id) as unique_users
+FROM z_auto_quotes q
+LEFT JOIN z_auto_users u ON q.user_id = u.id
+GROUP BY DATE_TRUNC('day', q.created_at), u.user_type
+ORDER BY date DESC;
+
+-- Vista de cotizaciones con información completa
+CREATE OR REPLACE VIEW z_auto_quotes_complete AS
+SELECT
+    q.*,
+    u.name as user_name,
+    u.email as user_email,
+    u.phone as user_phone,
+    u.agency_code,
+    u.agency_name,
+    a.name as agency_official_name,
+    a.contact_email as agency_email,
+    a.contact_phone as agency_phone,
+    a.city as agency_city,
+    a.state as agency_state
+FROM z_auto_quotes q
+LEFT JOIN z_auto_users u ON q.user_id = u.id
+LEFT JOIN z_auto_agencies a ON q.agency_id = a.id;
+
+-- Vista de simulaciones con información de cotización
+CREATE OR REPLACE VIEW z_auto_simulations_complete AS
+SELECT
+    s.*,
+    q.*,
+    r.tier_name,
+    r.annual_rate,
+    r.annual_rate_with_iva
+FROM z_auto_simulations s
+JOIN z_auto_quotes q ON s.quote_id = q.id
+JOIN z_auto_rate_tiers r ON s.tier_code = r.tier_code;
+
+-- =========================================
+-- POLÍTICAS DE SEGURIDAD (RLS)
+-- =========================================
+
+-- Habilitar RLS en todas las tablas
+ALTER TABLE z_auto_users ENABLE ROW LEVEL SECURITY;
+ALTER TABLE z_auto_agencies ENABLE ROW LEVEL SECURITY;
+ALTER TABLE z_auto_quotes ENABLE ROW LEVEL SECURITY;
+ALTER TABLE z_auto_simulations ENABLE ROW LEVEL SECURITY;
+ALTER TABLE z_auto_pdfs_generated ENABLE ROW LEVEL SECURITY;
+ALTER TABLE z_auto_audit_logs ENABLE ROW LEVEL SECURITY;
+ALTER TABLE z_auto_system_config ENABLE ROW LEVEL SECURITY;
+
+-- Políticas para z_auto_users
+CREATE POLICY "Users can view their own data" ON z_auto_users
+    FOR SELECT USING (auth.uid() = id);
+
+CREATE POLICY "Asesores can view all users" ON z_auto_users
+    FOR SELECT USING (
+        EXISTS (
+            SELECT 1 FROM z_auto_users
+            WHERE id = auth.uid() AND user_type = 'asesor'
+        )
+    );
+
+-- Políticas para z_auto_quotes
+CREATE POLICY "Users can view their own quotes" ON z_auto_quotes
+    FOR SELECT USING (user_id = auth.uid());
+
+CREATE POLICY "Asesores can view all quotes" ON z_auto_quotes
+    FOR SELECT USING (
+        EXISTS (
+            SELECT 1 FROM z_auto_users
+            WHERE id = auth.uid() AND user_type = 'asesor'
+        )
+    );
+
+-- Políticas para z_auto_simulations
+CREATE POLICY "Users can view simulations of their quotes" ON z_auto_simulations
+    FOR SELECT USING (
+        EXISTS (
+            SELECT 1 FROM z_auto_quotes
+            WHERE id = quote_id AND user_id = auth.uid()
+        )
+    );
+
+CREATE POLICY "Asesores can view all simulations" ON z_auto_simulations
+    FOR SELECT USING (
+        EXISTS (
+            SELECT 1 FROM z_auto_users
+            WHERE id = auth.uid() AND user_type = 'asesor'
+        )
+    );
+
+-- Políticas para z_auto_system_config (solo asesores)
+CREATE POLICY "Only asesores can view system config" ON z_auto_system_config
+    FOR SELECT USING (
+        EXISTS (
+            SELECT 1 FROM z_auto_users
+            WHERE id = auth.uid() AND user_type = 'asesor'
+        )
+    );
+
+-- =========================================
+-- MENSAJE DE CONFIRMACIÓN
+-- =========================================
+
+DO $$
+BEGIN
+    RAISE NOTICE '=====================================';
+    RAISE NOTICE 'BASE DE DATOS CREADA EXITOSAMENTE';
+    RAISE NOTICE '=====================================';
+    RAISE NOTICE 'Proyecto: ydnygntfkrleiseuciwq';
+    RAISE NOTICE 'Tablas creadas: 9';
+    RAISE NOTICE 'Prefijo: z_auto_';
+    RAISE NOTICE '=====================================';
+END $$;

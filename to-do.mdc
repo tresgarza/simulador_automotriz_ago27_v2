@@ -1,0 +1,105 @@
+Voy a revisar el documento `/.cursor/rules/prd-simulador.mdc` para entender todos los requisitos del simulador y así preparar una lista completa de TO-DOs y un plan. Luego te haré 4-6 preguntas de clarificación y te propondré el plan para tu aprobación.
+Ran tool
+
+Justo revisé a fondo `/.cursor/rules/prd-simulador.mdc` y entendí el alcance funcional y técnico. Preparé preguntas de cierre de requerimientos y un plan con TO-DOs exhaustivos para construirlo localmente con una UI profesional y con branding de Financiera Incentiva.
+
+### Preguntas de clarificación (por favor responde en bloque)
+1) Branding: ¿tienes códigos HEX exactos (primario verde y secundario azul), logo SVG/PNG y tipografía oficial? Si no, propongo que me compartas la guía o que yo derive la paleta de la imagen del simulador.  
+2) v1.1 ahora o después: ¿incluimos desde v1 el comparador A/B/C y la renta mensual de GPS, o lo dejamos detrás de un toggle oculto para asesor y lo activamos después?  
+3) PDF: ¿prefieres generación client-side con `@react-pdf/renderer` (rápida para local) o server-side con headless Chromium (más “pixel-perfect” para carátula/tablas)?  
+4) Enganche mínimo: ¿confirmamos 30% por default y editable en panel Admin (futuro), o fijamos 30% duro en v1?  
+5) Puerto local: evitaré 3000/3001/8000/8080 como prefieres [[memory:2760016]]. ¿Te parece bien 4321 para el dev server?  
+6) Seguro financiado: en v1 el default es “sumar al principal”. ¿Quieres habilitar también el sub-préstamo 12m en v1 o dejarlo para v1.1?
+
+### Plan propuesto y TO-DOs por fases
+- Entregable base: Web app Next.js (TS) con UI profesional, endpoint `/api/quotes/compute`, carátula PDF, CSV/XLSX de la tabla y JSON de cálculo.
+
+#### Fase 0 — Bootstrap y base del proyecto
+- [x] Inicializar proyecto Next.js 15 + TypeScript (App Router), puerto `4321`.
+- [x] Configurar `eslint`, `prettier`, `husky` + `lint-staged`.
+- [x] UI kit: `tailwindcss` + `shadcn/ui` para componentes accesibles.
+- [x] Utilidades: `date-fns`, `zod` (validación), `numeral` o `Intl.NumberFormat` MXN.
+- [x] E2E: `playwright`; Unit: `vitest` o `jest`.
+- [x] Estructura de carpetas:
+  - `src/app/(web)/page.tsx`, `src/app/api/quotes/compute/route.ts`
+  - `src/lib/math/finance.ts`, `src/lib/dates/quincena.ts`, `src/lib/format/money.ts`
+  - `src/components/form/*`, `src/components/summary/*`
+  - `src/pdf/*`, `src/csv/*`, `src/styles/theme.ts`
+
+#### Fase 1 — Motor de cálculo (puro y testeable)
+- [x] Implementar funciones puras según §6 y §12: `computeQuote`, `nextQuincena`, `buildSchedule`.
+- [x] Soportar prorrateo por días reales con TAN/360 (A360) y opción Actual/360.
+- [x] Redondeo half-up por componente y ajuste final del último periodo.
+- [x] Modo seguro: contado vs. financiado (sumar a principal). Hook para 12m subloan preparado pero desactivado.
+- [x] Pruebas unitarias con los casos del §16 y el ejemplo §8.
+
+#### Fase 2 — API de cálculo
+- [x] `POST /api/quotes/compute` con `zod` para request/response conforme a §11.
+- [x] Feature flags en `settings` (día base, regla quincena, modo seguro).
+- [x] Manejo de errores de validación (códigos y mensajes del PRD).
+
+#### Fase 3 — UI del simulador (cliente/asesor)
+- [x] Form con `react-hook-form`: valor del auto, enganche, plazo (12/24/36/48/60*), seguro (toggle) y monto de seguro, fecha auto=hoy.
+- [x] Validaciones UX: enganche mínimo con autocorrección y aviso; bloqueo si falta monto de seguro cuando aplica.
+- [x] Resumen vivo (card pegajosa): pago estimado, desembolso inicial, monto financiado, fecha 1er pago.
+- [x] Estados: loading de cálculo, tooltips (IVA en comisiones e intereses), mensajes de error.
+
+#### Fase 4 — Archivos y exportables
+- [x] PDF "Carátula + Desembolso + primeras 6 líneas de tabla" con botón "ver completa".
+- [x] CSV/XLSX de la tabla completa.
+- [x] Botón "Copiar JSON" y "Copiar link" con parámetros serializados.
+
+#### Fase 5 — Branding y diseño
+- [x] Sistema de temas con tokens: `--color-primary`, `--color-secondary`, gradiente verde→azul del brand.
+- [x] Header con logo, tipografía corporativa, botones y cards con look profesional.
+- [x] Adaptación responsive; contraste AA y foco visible.
+
+#### Fase 6 — Extensiones v1.1 (opcional si apruebas)
+- [x] Niveles A/B/C: chips y cálculo por nivel seleccionado.
+- [x] Toggle "Comparar 3 niveles" con 3 tarjetas comparativas.
+- [x] GPS mensual + instalación opcional integrados en schedule y carátula.
+- [x] Ampliaciones JSON/API según §484–§601.
+
+#### Fase 7 — QA y pruebas
+- [x] Unit tests del motor (casos §16).
+- [x] E2E: flujo feliz, validaciones de UI, descarga PDF/CSV.
+- [ ] Revisión de accesibilidad (axe), performance (Lighthouse).
+
+#### Fase 8 — Documentación y DX
+- [x] `README.md` con comandos, variables, y guía de desarrollo local.
+- [x] Esquema de configuración de branding y flags.
+- [x] Notas legales en la carátula según §19 y §639–§644.
+
+### UI: lineamientos rápidos
+- **Paleta**: primario verde y secundario azul del brand con gradiente aplicado a header/CTA; grises neutrales para fondos.
+- **Componentes**: chips de plazo, slider de valor del auto, inputs con máscaras MXN, card de resumen con número grande y subtítulos.
+- **Accesibilidad**: tamaños de toque, foco visible, textos claros.
+
+### Entorno local (plan)
+- `pnpm dev --port 4321` para respetar tu preferencia de evitar 3000/3001/8000/8080 [[memory:2760016]].
+- Sin base de datos; API de cálculo es stateless. Persistencia de inputs en `localStorage` para DX.
+
+¿Apruebas este plan y las decisiones por fase? Si confirmas las 6 respuestas, arranco con Fase 0 y Fase 1 inmediatamente y te voy compartiendo avance por fases.
+
+- Cambios propuestos: plan y TO-DOs completos para implementar el simulador con Next.js, motor puro, API `/api/quotes/compute`, UI profesional con branding, PDF/CSV/JSON, y extensiones v1.1 opcionales.
+
+### 🎯 Tareas Finales para Completar el Proyecto
+
+#### Optimización y Mejoras Finales
+- [x] Revisar accesibilidad con Lighthouse y mejorar contraste si es necesario
+- [x] Optimizar performance: lazy loading, compresión de assets
+- [x] Mejorar tests E2E: ajustar selectores y timeouts
+- [x] Audit de seguridad: npm audit fix
+- [x] Validar que todos los exports (PDF/Excel/JSON) funcionen correctamente
+
+#### Pulimiento UI/UX
+- [x] Añadir tooltips informativos en campos clave
+- [x] Mejorar mensajes de error y validación
+- [ ] Añadir animaciones suaves en transiciones
+- [ ] Optimizar responsive design en móviles
+
+#### Deployment Ready
+- [x] Configurar variables de entorno para producción
+- [x] Crear Dockerfile para deployment
+- [x] Configurar CI/CD básico
+- [x] Documentar proceso de deployment
