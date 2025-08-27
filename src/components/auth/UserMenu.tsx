@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
-import { User, LogOut, Settings, FileText, BarChart3, ChevronDown } from "lucide-react";
+import Link from "next/link";
+import { User, LogOut, Settings, FileText, BarChart3, ChevronDown, FileCheck } from "lucide-react";
 import { useAuth } from "../../../lib/auth";
 
 export function UserMenu() {
@@ -88,10 +89,18 @@ export function UserMenu() {
             <div className="p-2">
               {user.user_type === 'asesor' && (
                 <>
-                  <button className="w-full flex items-center space-x-3 px-3 py-2 text-gray-700 hover:bg-gray-50 rounded-xl transition-colors">
-                    <BarChart3 className="w-4 h-4" />
-                    <span>Dashboard</span>
-                  </button>
+                  <Link href="/autorizaciones" onClick={() => setIsOpen(false)}>
+                    <button className="w-full flex items-center space-x-3 px-3 py-2 text-gray-700 hover:bg-gray-50 rounded-xl transition-colors">
+                      <FileCheck className="w-4 h-4" />
+                      <span>Sistema de Autorizaciones</span>
+                    </button>
+                  </Link>
+                  <Link href="#" onClick={() => setIsOpen(false)}>
+                    <button className="w-full flex items-center space-x-3 px-3 py-2 text-gray-700 hover:bg-gray-50 rounded-xl transition-colors">
+                      <BarChart3 className="w-4 h-4" />
+                      <span>Dashboard</span>
+                    </button>
+                  </Link>
                   <button className="w-full flex items-center space-x-3 px-3 py-2 text-gray-700 hover:bg-gray-50 rounded-xl transition-colors">
                     <Settings className="w-4 h-4" />
                     <span>Configuración</span>

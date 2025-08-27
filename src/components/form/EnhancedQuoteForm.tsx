@@ -121,7 +121,7 @@ export function EnhancedQuoteForm({ onSubmit, isSubmitting, hasResults = false }
     watch,
     setValue,
     formState: { errors },
-  } = useForm<any>({
+  } = useForm<EnhancedFormData>({
     resolver: zodResolver(getFormSchema()),
     defaultValues: {
       vehicle_value: 405900,
