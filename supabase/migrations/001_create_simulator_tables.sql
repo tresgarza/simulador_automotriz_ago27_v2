@@ -132,7 +132,20 @@ CREATE TABLE IF NOT EXISTS z_auto_pdfs_generated (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- 7. TABLA DE AUDITORÍA
+-- 7. TABLA DE EXPORTACIONES GENERADAS (Excel/JSON)
+CREATE TABLE IF NOT EXISTS z_auto_exports_generated (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    simulation_id UUID REFERENCES z_auto_simulations(id) ON DELETE CASCADE,
+    quote_id UUID REFERENCES z_auto_quotes(id) ON DELETE CASCADE,
+    export_type VARCHAR(20) NOT NULL CHECK (export_type IN ('excel', 'json', 'pdf')),
+    file_name VARCHAR(255),
+    generated_by_user_id UUID REFERENCES z_auto_users(id),
+    ip_address INET,
+    user_agent TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- 8. TABLA DE AUDITORÍA
 CREATE TABLE IF NOT EXISTS z_auto_audit_logs (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     table_name VARCHAR(100) NOT NULL,
@@ -177,6 +190,12 @@ CREATE INDEX IF NOT EXISTS idx_z_auto_quotes_created_at ON z_auto_quotes(created
 CREATE INDEX IF NOT EXISTS idx_z_auto_simulations_quote_id ON z_auto_simulations(quote_id);
 CREATE INDEX IF NOT EXISTS idx_z_auto_simulations_tier_term ON z_auto_simulations(tier_code, term_months);
 
+-- Índices para z_auto_exports_generated
+CREATE INDEX IF NOT EXISTS idx_z_auto_exports_generated_quote_id ON z_auto_exports_generated(quote_id);
+CREATE INDEX IF NOT EXISTS idx_z_auto_exports_generated_simulation_id ON z_auto_exports_generated(simulation_id);
+CREATE INDEX IF NOT EXISTS idx_z_auto_exports_generated_type ON z_auto_exports_generated(export_type);
+CREATE INDEX IF NOT EXISTS idx_z_auto_exports_generated_created_at ON z_auto_exports_generated(created_at);
+
 -- Índices para z_auto_audit_logs
 CREATE INDEX IF NOT EXISTS idx_z_auto_audit_logs_table_record ON z_auto_audit_logs(table_name, record_id);
 CREATE INDEX IF NOT EXISTS idx_z_auto_audit_logs_created_at ON z_auto_audit_logs(created_at);
@@ -203,3 +222,10 @@ VALUES
     ('min_down_payment_percentage', '0.30', 'Enganche mínimo (30%)'),
     ('available_terms', '[24, 36, 48, 60]', 'Plazos disponibles en meses')
 ON CONFLICT (config_key) DO NOTHING;
+
+-- =========================================
+-- LIMPIEZA DE TABLAS NO UTILIZADAS
+-- =========================================
+
+-- Eliminar tabla temporal no utilizada
+DROP TABLE IF EXISTS z_auto_temp_simulations CASCADE;

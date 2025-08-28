@@ -51,6 +51,79 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Validaciones adicionales de negocio
+    if (vehicleValue <= 0 || downPaymentAmount <= 0) {
+      return NextResponse.json(
+        { error: 'Los valores deben ser mayores a cero' },
+        { status: 400 }
+      )
+    }
+
+    if (downPaymentAmount >= vehicleValue) {
+      return NextResponse.json(
+        { error: 'El enganche no puede ser mayor o igual al valor del vehículo' },
+        { status: 400 }
+      )
+    }
+
+    const minimumDownPayment = vehicleValue * 0.30; // 30% mínimo
+    if (downPaymentAmount < minimumDownPayment) {
+      return NextResponse.json(
+        { error: `El enganche mínimo requerido es de ${minimumDownPayment.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })} (30%)` },
+        { status: 400 }
+      )
+    }
+
+    // Validar datos del cliente si están presentes
+    if (clientEmail && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(clientEmail)) {
+      return NextResponse.json(
+        { error: 'El formato del email no es válido' },
+        { status: 400 }
+      )
+    }
+
+    if (clientPhone && !/^[\d\s\-\+\(\)]+$/.test(clientPhone)) {
+      return NextResponse.json(
+        { error: 'El formato del teléfono no es válido' },
+        { status: 400 }
+      )
+    }
+
+    // Validar año del vehículo
+    if (vehicleYear && (vehicleYear < 1900 || vehicleYear > new Date().getFullYear() + 1)) {
+      return NextResponse.json(
+        { error: 'El año del vehículo no es válido' },
+        { status: 400 }
+      )
+    }
+
+    // Validar montos de seguro si están presentes
+    if (insuranceAmount && insuranceAmount < 0) {
+      return NextResponse.json(
+        { error: 'El monto del seguro no puede ser negativo' },
+        { status: 400 }
+      )
+    }
+
+    // Validar que no haya cotizaciones duplicadas recientes (evitar spam)
+    if (userId) {
+      const { data: recentQuote } = await supabaseClient
+        .from('z_auto_quotes')
+        .select('id, created_at')
+        .eq('user_id', userId)
+        .eq('vehicle_value', vehicleValue)
+        .eq('down_payment_amount', downPaymentAmount)
+        .gte('created_at', new Date(Date.now() - 60000).toISOString()) // Último minuto
+        .single();
+
+      if (recentQuote) {
+        return NextResponse.json(
+          { error: 'Ya existe una cotización similar creada recientemente. Por favor espera un momento antes de crear otra.' },
+          { status: 429 }
+        )
+      }
+    }
+
     // Si hay userId, obtener el agency_id si es usuario de agencia
     let finalAgencyId = agencyId;
     if (userId && !agencyId) {

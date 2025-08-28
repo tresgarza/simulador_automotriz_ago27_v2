@@ -9,11 +9,16 @@ import { AuthorizationForm } from "../../components/authorization/AuthorizationF
 interface AuthorizationRequest {
   id: string;
   simulation: SimulationWithQuote;
-  status: 'pending' | 'approved' | 'rejected';
+  status: 'pending' | 'approved' | 'rejected' | 'in_review' | 'cancelled';
   createdAt: string;
   updatedAt?: string;
   reviewerId?: string;
   reviewerName?: string;
+  priority?: 'low' | 'medium' | 'high' | 'urgent';
+  riskLevel?: 'low' | 'medium' | 'high';
+  clientComments?: string;
+  internalNotes?: string;
+  approvalNotes?: string;
 }
 
 export default function AutorizacionesPage() {
@@ -69,15 +74,46 @@ export default function AutorizacionesPage() {
     setIsLoadingData(true);
     setIsLoading(true);
     try {
-      // Por ahora cargamos todas las simulaciones como solicitudes pendientes
-      // En el futuro esto debería ser una tabla específica de solicitudes de autorización
-      const simulations = await SimulationService.getUserSimulations(user.id, 'asesor');
+      // Cargar solicitudes de autorización reales de la base de datos
+      const response = await fetch('/api/authorization-requests?limit=100');
+      const result = await response.json();
 
-      const authorizationRequests: AuthorizationRequest[] = simulations.map(simulation => ({
-        id: simulation.id,
-        simulation,
-        status: 'pending' as const,
-        createdAt: simulation.calculated_at
+      if (!response.ok) {
+        throw new Error(result.error || 'Error al cargar solicitudes de autorización');
+      }
+
+      // Transformar los datos para que coincidan con la interfaz AuthorizationRequest
+      const authorizationRequests: AuthorizationRequest[] = result.authorization_requests.map((authReq: any) => ({
+        id: authReq.id,
+        simulation: {
+          id: authReq.z_auto_simulations.id,
+          tier_code: authReq.z_auto_simulations.tier_code,
+          term_months: authReq.z_auto_simulations.term_months,
+          monthly_payment: authReq.z_auto_simulations.monthly_payment,
+          total_to_finance: authReq.z_auto_simulations.total_to_finance,
+          calculated_at: authReq.created_at,
+          quote: {
+            id: authReq.z_auto_quotes.id,
+            client_name: authReq.z_auto_quotes.client_name,
+            client_email: authReq.z_auto_quotes.client_email,
+            client_phone: authReq.z_auto_quotes.client_phone,
+            vehicle_brand: authReq.z_auto_quotes.vehicle_brand,
+            vehicle_model: authReq.z_auto_quotes.vehicle_model,
+            vehicle_year: authReq.z_auto_quotes.vehicle_year,
+            vehicle_value: authReq.z_auto_quotes.vehicle_value,
+            created_at: authReq.z_auto_quotes.created_at
+          }
+        },
+        status: authReq.status,
+        createdAt: authReq.created_at,
+        updatedAt: authReq.updated_at,
+        reviewerId: authReq.assigned_to_user_id,
+        reviewerName: authReq.assigned_to?.name,
+        priority: authReq.priority,
+        riskLevel: authReq.risk_level,
+        clientComments: authReq.client_comments,
+        internalNotes: authReq.internal_notes,
+        approvalNotes: authReq.approval_notes
       }));
 
       setRequests(authorizationRequests);

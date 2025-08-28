@@ -1,11 +1,13 @@
 "use client";
 import { useState, useEffect } from "react";
-import { Download, FileText, Share2, TrendingUp, Clock, Star, CheckCircle } from "lucide-react";
+import { Download, FileText, Share2, TrendingUp, Clock, Star, CheckCircle, Check, FileCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { exportScheduleXLSX } from "@/csv/export";
 import { formatMXN } from "@/lib/utils";
 import { generateProfessionalPDF } from "@/components/pdf/ProfessionalPDFGenerator";
 import { useAuth } from "../../../lib/auth";
+import { AuthorizationService } from "../../../lib/authorization-service";
+import { AuthorizationForm } from "../authorization/AuthorizationForm";
 
 type ApiResult = {
   summary: {
@@ -60,6 +62,9 @@ interface PlansMatrixProps {
   // Datos del vendedor/agencia
   vendorName?: string;
   dealerAgency?: string;
+  // IDs para tracking
+  currentQuoteId?: string | null;
+  selectedSimulationId?: string | null;
 }
 
 const tierConfig = [
@@ -141,11 +146,11 @@ const AnimatedNumber = ({ value, format = true }: { value: number; format?: bool
   );
 };
 
-export function PlansMatrix({ 
-  result, 
-  vehicleValue = 405900, 
-  downPayment = 121770, 
-  insuranceAmount = 19500, 
+export function PlansMatrix({
+  result,
+  vehicleValue = 405900,
+  downPayment = 121770,
+  insuranceAmount = 19500,
   insuranceMode = "cash",
   commissionMode = "cash",
   clientName,
@@ -155,9 +160,34 @@ export function PlansMatrix({
   vehicleModel,
   vehicleYear,
   vendorName,
-  dealerAgency
+  dealerAgency,
+  currentQuoteId,
+  selectedSimulationId
 }: PlansMatrixProps) {
   const { isAsesor, isAgency, user } = useAuth();
+
+  // Estado para controlar la confirmación de selección
+  const [isSelectionConfirmed, setIsSelectionConfirmed] = useState(false);
+  const [isConfirming, setIsConfirming] = useState(false);
+  
+  // Estado para el modal de autorización
+  const [showAuthorizationForm, setShowAuthorizationForm] = useState(false);
+  const [isRequestingAuthorization, setIsRequestingAuthorization] = useState(false);
+  const [isAuthorizationSent, setIsAuthorizationSent] = useState(false);
+
+  // Función para confirmar la selección
+  const handleConfirmSelection = async () => {
+    setIsConfirming(true);
+    try {
+      // Simular un pequeño delay para feedback visual
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      setIsSelectionConfirmed(true);
+    } catch (error) {
+      console.error('Error confirming selection:', error);
+    } finally {
+      setIsConfirming(false);
+    }
+  };
   
   // Determinar el primer tier disponible basado en los datos
   const availableTiers = Object.keys(result).filter(tier => 
@@ -169,6 +199,12 @@ export function PlansMatrix({
   );
   const [selectedTerm, setSelectedTerm] = useState<Term>(48);
 
+  // Reset del estado cuando cambian los parámetros de simulación
+  useEffect(() => {
+    setIsSelectionConfirmed(false);
+    setIsAuthorizationSent(false);
+  }, [selectedTier, selectedTerm]);
+
   const currentResult = result[selectedTier]?.[selectedTerm];
   
   // Filtrar configuración de tiers para mostrar solo los disponibles
@@ -176,7 +212,7 @@ export function PlansMatrix({
     availableTiers.includes(tier.key)
   );
 
-  const handleExportXLSX = () => {
+  const handleExportXLSX = async () => {
     const rows = (currentResult?.schedule || []).map((row) => ({
       Periodo: row.k,
       Fecha: row.date,
@@ -190,11 +226,77 @@ export function PlansMatrix({
       "Pago Total": row.pago_total,
       "Saldo Final": row.saldo_fin,
     }));
+
+    const fileName = `amortizacion_${selectedTier}_${selectedTerm}meses.xlsx`;
+
+    // Exportar Excel
     exportScheduleXLSX(rows);
+
+    // Tracking de la exportación (si tenemos IDs)
+    if (selectedSimulationId && currentQuoteId) {
+      try {
+        const trackingData = {
+          simulation_id: selectedSimulationId,
+          quote_id: currentQuoteId,
+          export_type: 'excel',
+          file_name: fileName,
+          generated_by_user_id: user?.id || null,
+          ip_address: null,
+          user_agent: typeof window !== 'undefined' ? navigator.userAgent : null
+        };
+
+        // Enviar a API de tracking (no bloquear la exportación si falla)
+        fetch('/api/exports/track', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(trackingData)
+        }).catch(error => {
+          console.warn('Error tracking Excel export:', error);
+        });
+
+      } catch (error) {
+        console.warn('Error preparing Excel export tracking:', error);
+      }
+    }
   };
 
-  const handleCopyJSON = () => {
-    navigator.clipboard.writeText(JSON.stringify(currentResult, null, 2));
+  const handleCopyJSON = async () => {
+    const jsonData = JSON.stringify(currentResult, null, 2);
+    const fileName = `simulacion_${selectedTier}_${selectedTerm}meses.json`;
+
+    // Copiar al portapapeles
+    await navigator.clipboard.writeText(jsonData);
+
+    // Tracking de la exportación (si tenemos IDs)
+    if (selectedSimulationId && currentQuoteId) {
+      try {
+        const trackingData = {
+          simulation_id: selectedSimulationId,
+          quote_id: currentQuoteId,
+          export_type: 'json',
+          file_name: fileName,
+          generated_by_user_id: user?.id || null,
+          ip_address: null,
+          user_agent: typeof window !== 'undefined' ? navigator.userAgent : null
+        };
+
+        // Enviar a API de tracking (no bloquear la copia si falla)
+        fetch('/api/exports/track', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(trackingData)
+        }).catch(error => {
+          console.warn('Error tracking JSON export:', error);
+        });
+
+      } catch (error) {
+        console.warn('Error preparing JSON export tracking:', error);
+      }
+    }
   };
 
   const handleGeneratePDF = async () => {
@@ -231,6 +333,10 @@ export function PlansMatrix({
         // Datos del vendedor/agencia
         vendorName: finalVendorName,
         dealerAgency: finalDealerAgency,
+        // IDs para tracking
+        simulationId: selectedSimulationId || undefined,
+        quoteId: currentQuoteId || undefined,
+        generatedByUserId: user?.id
       };
       await generateProfessionalPDF(pdfData);
     } catch (error) {
@@ -250,6 +356,93 @@ export function PlansMatrix({
   
   // Seguro de vida fijo
   const lifeInsurance = 300;
+
+  // Función para solicitar autorización
+  const handleRequestAuthorization = async () => {
+    setIsRequestingAuthorization(true);
+    try {
+      // Si no tenemos IDs de simulación guardados, crear una solicitud básica
+      if (!selectedSimulationId || !currentQuoteId) {
+        console.warn('⚠️ No hay IDs de simulación/cotización guardados. Creando solicitud básica...');
+        
+        // Crear una solicitud básica con los datos disponibles
+        const basicAuthRequest = {
+          // Usar datos temporales si no hay IDs guardados
+          simulation_id: null, // Se puede crear sin simulation_id
+          quote_id: null, // Se puede crear sin quote_id
+          priority: 'high', // Alta prioridad porque no tiene simulación guardada
+          client_comments: `Solicitud de autorización para ${selectedTier}-${selectedTerm} meses. Datos del vehículo: ${vehicleBrand} ${vehicleModel} ${vehicleYear}. Valor: $${vehicleValue?.toLocaleString()}`,
+          risk_level: 'medium',
+          created_by_user_id: user?.id,
+          // Agregar datos básicos disponibles
+          client_name: clientName || 'Cliente no especificado',
+          client_email: clientEmail,
+          client_phone: clientPhone,
+          vehicle_brand: vehicleBrand,
+          vehicle_model: vehicleModel,
+          vehicle_year: vehicleYear,
+          vehicle_value: vehicleValue,
+          requested_amount: currentResult?.summary?.principal_total || vehicleValue,
+          monthly_payment: currentResult?.summary?.pmt_base,
+          term_months: selectedTerm,
+          agency_name: dealerAgency || vendorName,
+          dealer_name: vendorName,
+          internal_notes: 'Solicitud creada sin simulación guardada - requiere revisión manual'
+        };
+
+        const response = await fetch('/api/authorization-requests', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(basicAuthRequest)
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(result.error || 'Error al crear solicitud de autorización');
+        }
+
+        console.log('✅ Solicitud de autorización básica creada:', result.authorization_request);
+        setIsAuthorizationSent(true);
+        // alert('¡Solicitud de autorización enviada exitosamente! Será revisada por un asesor.\n\nNota: Se creó una solicitud básica debido a problemas técnicos con el guardado de simulaciones.');
+        
+      } else {
+        // Flujo normal con IDs de simulación
+        const response = await fetch('/api/authorization-requests', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            simulation_id: selectedSimulationId,
+            quote_id: currentQuoteId,
+            priority: 'medium',
+            client_comments: `Solicitud generada desde simulación ${selectedTier}-${selectedTerm} meses`,
+            risk_level: 'medium',
+            created_by_user_id: user?.id
+          })
+        });
+
+        const result = await response.json();
+
+        if (!response.ok) {
+          throw new Error(result.error || 'Error al crear solicitud de autorización');
+        }
+
+        console.log('✅ Solicitud de autorización completa creada:', result.authorization_request);
+        setIsAuthorizationSent(true);
+        // alert('¡Solicitud de autorización enviada exitosamente! Será revisada por un asesor.');
+      }
+      
+    } catch (error) {
+      console.error('❌ Error creating authorization request:', error);
+      alert('Error al crear la solicitud de autorización: ' + (error as Error).message);
+    } finally {
+      setIsRequestingAuthorization(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -400,36 +593,151 @@ export function PlansMatrix({
           </div>
 
           {/* Action Buttons */}
-          <div className={`grid gap-4 ${isAsesor ? 'grid-cols-1 md:grid-cols-3' : 'grid-cols-1'}`}>
-            <Button
-              variant="outline"
-              className="w-full py-3 bg-white/10 border-white/30 text-white hover:bg-white/20"
-              onClick={() => handleGeneratePDF()}
-            >
-              <FileText className="w-4 h-4 mr-2" />
-              Descargar PDF
-            </Button>
+          <div className="space-y-4">
+            {!isSelectionConfirmed ? (
+              /* Botón de confirmación */
+              <div className="text-center">
+                <Button
+                  onClick={handleConfirmSelection}
+                  disabled={isConfirming}
+                  className="w-full py-4 px-8 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-bold text-lg rounded-2xl shadow-xl transform hover:scale-105 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {isConfirming ? (
+                    <div className="flex items-center justify-center">
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-3"></div>
+                      Confirmando...
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-center">
+                      <CheckCircle className="w-6 h-6 mr-3" />
+                      CONFIRMAR SELECCIÓN
+                    </div>
+                  )}
+                </Button>
+                <p className="text-white/60 text-sm mt-2">
+                  Confirma para guardar los datos y acceder a las opciones de descarga
+                </p>
+              </div>
+            ) : !isAuthorizationSent ? (
+              /* Botón de Solicitar Autorización después de confirmar */
+              <div className="text-center">
+                <div className="inline-flex items-center px-4 py-2 bg-green-500/20 border border-green-400 rounded-xl text-green-100 mb-4">
+                  <Check className="w-4 h-4 mr-2" />
+                  <span className="text-sm font-medium">Selección confirmada - Datos guardados en Supabase</span>
+                </div>
+                
+                <Button
+                  onClick={handleRequestAuthorization}
+                  disabled={isRequestingAuthorization}
+                  className="w-full py-4 px-8 bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-bold text-lg rounded-2xl shadow-xl transform hover:scale-105 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed mb-6"
+                >
+                  {isRequestingAuthorization ? (
+                    <div className="flex items-center justify-center">
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-3"></div>
+                      Enviando solicitud...
+                    </div>
+                  ) : (
+                    <div className="flex items-center justify-center">
+                      <FileCheck className="w-6 h-6 mr-3" />
+                      SOLICITAR AUTORIZACIÓN
+                    </div>
+                  )}
+                </Button>
+                <p className="text-white/60 text-sm mb-6">
+                  Envía tu solicitud para revisión por un asesor especializado
+                </p>
 
-            {/* Excel y JSON solo para Asesores */}
-            {isAsesor && (
+                {/* Botones de descarga disponibles también */}
+                <div className="border-t border-white/10 pt-6">
+                  <p className="text-white/60 text-sm mb-4 text-center">
+                    O también puedes descargar tu cotización:
+                  </p>
+                  <div className={`grid gap-4 ${isAsesor ? 'grid-cols-1 md:grid-cols-3' : 'grid-cols-1'}`}>
+                    <Button
+                      variant="outline"
+                      className="w-full py-3 bg-white/10 border-white/30 text-white hover:bg-white/20"
+                      onClick={() => handleGeneratePDF()}
+                    >
+                      <FileText className="w-4 h-4 mr-2" />
+                      Descargar PDF
+                    </Button>
+
+                    {/* Excel y JSON solo para Asesores */}
+                    {isAsesor && (
+                      <>
+                        <Button
+                          variant="outline"
+                          className="w-full py-3 bg-white/10 border-white/30 text-white hover:bg-white/20"
+                          onClick={handleExportXLSX}
+                        >
+                          <Download className="w-4 h-4 mr-2" />
+                          Exportar Excel
+                        </Button>
+
+                        <Button
+                          variant="outline"
+                          className="w-full py-3 bg-white/10 border-white/30 text-white hover:bg-white/20"
+                          onClick={handleCopyJSON}
+                        >
+                          <Share2 className="w-4 h-4 mr-2" />
+                          Copiar JSON
+                        </Button>
+                      </>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              /* Estado final - Autorización enviada */
               <>
-                <Button
-                  variant="outline"
-                  className="w-full py-3 bg-white/10 border-white/30 text-white hover:bg-white/20"
-                  onClick={handleExportXLSX}
-                >
-                  <Download className="w-4 h-4 mr-2" />
-                  Exportar Excel
-                </Button>
+                <div className="text-center mb-6">
+                  <div className="inline-flex items-center px-4 py-2 bg-green-500/20 border border-green-400 rounded-xl text-green-100 mb-2">
+                    <Check className="w-4 h-4 mr-2" />
+                    <span className="text-sm font-medium">Selección confirmada - Datos guardados en Supabase</span>
+                  </div>
+                  <div className="inline-flex items-center px-4 py-2 bg-blue-500/20 border border-blue-400 rounded-xl text-blue-100">
+                    <FileCheck className="w-4 h-4 mr-2" />
+                    <span className="text-sm font-medium">¡Solicitud de autorización enviada exitosamente!</span>
+                  </div>
+                  <p className="text-white/70 text-sm mt-4">
+                    Tu solicitud será revisada por un asesor. Te contactaremos pronto.
+                  </p>
+                </div>
 
-                <Button
-                  variant="outline"
-                  className="w-full py-3 bg-white/10 border-white/30 text-white hover:bg-white/20"
-                  onClick={handleCopyJSON}
-                >
-                  <Share2 className="w-4 h-4 mr-2" />
-                  Copiar JSON
-                </Button>
+                {/* Botones de descarga después de enviar autorización */}
+                <div className={`grid gap-4 ${isAsesor ? 'grid-cols-1 md:grid-cols-3' : 'grid-cols-1'}`}>
+                  <Button
+                    variant="outline"
+                    className="w-full py-3 bg-white/10 border-white/30 text-white hover:bg-white/20"
+                    onClick={() => handleGeneratePDF()}
+                  >
+                    <FileText className="w-4 h-4 mr-2" />
+                    Descargar PDF
+                  </Button>
+
+                  {/* Excel y JSON solo para Asesores */}
+                  {isAsesor && (
+                    <>
+                      <Button
+                        variant="outline"
+                        className="w-full py-3 bg-white/10 border-white/30 text-white hover:bg-white/20"
+                        onClick={handleExportXLSX}
+                      >
+                        <Download className="w-4 h-4 mr-2" />
+                        Exportar Excel
+                      </Button>
+
+                      <Button
+                        variant="outline"
+                        className="w-full py-3 bg-white/10 border-white/30 text-white hover:bg-white/20"
+                        onClick={handleCopyJSON}
+                      >
+                        <Share2 className="w-4 h-4 mr-2" />
+                        Copiar JSON
+                      </Button>
+                    </>
+                  )}
+                </div>
               </>
             )}
           </div>

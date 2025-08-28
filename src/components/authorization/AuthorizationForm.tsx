@@ -138,17 +138,92 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
   const onSubmit = async (data: AuthorizationFormData) => {
     setIsSubmitting(true);
     try {
-      // Aquí iría la lógica para guardar la autorización
-      // Por ahora solo mostramos los datos
-      console.log("Authorization Data:", data);
+      // Preparar datos para la API
+      const authorizationRequest = {
+        simulation_id: request.simulation.id,
+        quote_id: request.simulation.quote_id,
+        priority: 'medium',
+        client_name: data.applicant_name,
+        client_email: request.simulation?.quote?.client_email,
+        client_phone: request.simulation?.quote?.client_phone,
+        vehicle_brand: data.vehicle_brand,
+        vehicle_model: data.vehicle_model,
+        vehicle_year: data.vehicle_year,
+        vehicle_value: data.sale_value,
+        requested_amount: data.requested_amount,
+        monthly_payment: request.simulation.monthly_payment,
+        term_months: data.term_months,
+        agency_name: data.dealership,
+        dealer_name: data.dealership,
+        promoter_code: request.simulation?.quote?.promoter_code,
+        client_comments: data.comments,
+        risk_level: 'medium',
+        // Guardar todos los datos del formulario como JSONB
+        authorization_data: {
+          // Datos del solicitante
+          company: data.company,
+          applicant_name: data.applicant_name,
+          position: data.position,
+          age: data.age,
+          marital_status: data.marital_status,
+          seniority: data.seniority,
+          monthly_salary: data.monthly_salary,
+          requested_amount: data.requested_amount,
+          term_months: data.term_months,
+          interest_rate: data.interest_rate,
+          opening_fee: data.opening_fee,
+          monthly_capacity: data.monthly_capacity,
+          monthly_discount: data.monthly_discount,
+          comments: data.comments,
+          
+          // Análisis financiero
+          incomes: data.incomes,
+          commitments: data.commitments,
+          personal_expenses: data.personal_expenses,
+          business_expenses: data.business_expenses,
+          
+          // Datos del vehículo
+          dealership: data.dealership,
+          vehicle_brand: data.vehicle_brand,
+          vehicle_model: data.vehicle_model,
+          vehicle_year: data.vehicle_year,
+          sale_value: data.sale_value,
+          book_value: data.book_value,
+          competitor_1: data.competitor_1,
+          competitor_2: data.competitor_2,
+          competitor_3: data.competitor_3,
+          
+          // Cálculos automáticos
+          total_income: totalIncome,
+          total_expenses: totalExpenses,
+          available_income: availableIncome,
+          capacity_percentage: capacityPercentage
+        }
+      };
 
-      // Simular guardado
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // Enviar a la API
+      const response = await fetch('/api/authorization-requests', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(authorizationRequest)
+      });
 
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Error al crear solicitud de autorización');
+      }
+
+      console.log('Solicitud de autorización creada:', result.authorization_request);
+      
       // Cerrar el modal
       onClose();
     } catch (error) {
       console.error("Error submitting authorization:", error);
+      // Aquí podrías mostrar un toast o mensaje de error al usuario
+      alert('Error al crear la solicitud de autorización: ' + (error as Error).message);
     } finally {
       setIsSubmitting(false);
     }

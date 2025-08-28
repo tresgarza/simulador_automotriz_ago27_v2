@@ -58,6 +58,10 @@ interface PDFData {
   vehicleUsage?: string;
   vehicleOrigin?: string;
   serialNumber?: string;
+  // Campos para tracking
+  simulationId?: string;
+  quoteId?: string;
+  generatedByUserId?: string;
 }
 
 export const generateProfessionalPDF = async (data: PDFData) => {
@@ -861,7 +865,38 @@ export const generateProfessionalPDF = async (data: PDFData) => {
     .substring(0, 15); // Limitar longitud
   
   const fileName = `fincentiva_cotizacion_${day}_${month}_${termMonths}meses_${cleanClientName}.pdf`;
-  
+
+  // Tracking del PDF generado (si se proporcionan IDs)
+  if (data.simulationId && data.quoteId) {
+    try {
+      // Registrar el PDF generado en Supabase
+      const trackingData = {
+        simulation_id: data.simulationId,
+        quote_id: data.quoteId,
+        file_name: fileName,
+        file_url: null, // No tenemos URL ya que es descarga local
+        file_size_bytes: null, // No podemos calcular fácilmente el tamaño
+        generated_by_user_id: data.generatedByUserId || null,
+        ip_address: typeof window !== 'undefined' ? null : null, // Solo en server-side
+        user_agent: typeof window !== 'undefined' ? navigator.userAgent : null
+      };
+
+      // Enviar a API de tracking (no bloquear la descarga del PDF si falla)
+      fetch('/api/pdfs/track', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(trackingData)
+      }).catch(error => {
+        console.warn('Error tracking PDF generation:', error);
+      });
+
+    } catch (error) {
+      console.warn('Error preparing PDF tracking:', error);
+    }
+  }
+
   // Save PDF
   pdf.save(fileName);
 };

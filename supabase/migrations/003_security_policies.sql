@@ -234,3 +234,66 @@ CREATE POLICY "Only asesores can manage rate tiers" ON z_auto_rate_tiers
             WHERE id = auth.uid() AND user_type = 'asesor'
         )
     );
+
+-- =========================================
+-- POLÍTICAS PARA NUEVAS TABLAS
+-- =========================================
+
+-- Políticas para z_auto_exports_generated
+ALTER TABLE z_auto_exports_generated ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can view exports of their quotes" ON z_auto_exports_generated
+    FOR SELECT USING (
+        EXISTS (
+            SELECT 1 FROM z_auto_quotes
+            WHERE id = quote_id AND user_id = auth.uid()
+        )
+    );
+
+CREATE POLICY "Users can create exports for their quotes" ON z_auto_exports_generated
+    FOR INSERT WITH CHECK (
+        EXISTS (
+            SELECT 1 FROM z_auto_quotes
+            WHERE id = quote_id AND user_id = auth.uid()
+        )
+    );
+
+CREATE POLICY "Agencies can view exports from their agency quotes" ON z_auto_exports_generated
+    FOR SELECT USING (
+        EXISTS (
+            SELECT 1 FROM z_auto_quotes q
+            JOIN z_auto_agencies a ON q.agency_id = a.id
+            WHERE q.id = quote_id AND a.agency_code IN (
+                SELECT agency_code FROM z_auto_users
+                WHERE id = auth.uid() AND user_type = 'agency'
+            )
+        )
+    );
+
+CREATE POLICY "Agencies can create exports for their agency quotes" ON z_auto_exports_generated
+    FOR INSERT WITH CHECK (
+        EXISTS (
+            SELECT 1 FROM z_auto_quotes q
+            JOIN z_auto_agencies a ON q.agency_id = a.id
+            WHERE q.id = quote_id AND a.agency_code IN (
+                SELECT agency_code FROM z_auto_users
+                WHERE id = auth.uid() AND user_type = 'agency'
+            )
+        )
+    );
+
+CREATE POLICY "Asesores can view all exports" ON z_auto_exports_generated
+    FOR SELECT USING (
+        EXISTS (
+            SELECT 1 FROM z_auto_users
+            WHERE id = auth.uid() AND user_type = 'asesor'
+        )
+    );
+
+CREATE POLICY "Asesores can manage all exports" ON z_auto_exports_generated
+    FOR ALL USING (
+        EXISTS (
+            SELECT 1 FROM z_auto_users
+            WHERE id = auth.uid() AND user_type = 'asesor'
+        )
+    );

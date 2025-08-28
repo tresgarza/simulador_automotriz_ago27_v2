@@ -7,53 +7,145 @@ import { Calculator, Car, DollarSign, Shield, Info, HelpCircle, CreditCard, User
 import { useState, useEffect } from "react";
 import { useAuth } from "../../../lib/auth";
 
-// Schema extendido para capturar más datos según el rol
-const BaseFormSchema = z.object({
-  vehicle_value: z.coerce.number().min(10000, "El valor del vehículo debe ser mayor a $10,000"),
-  down_payment_amount: z.coerce.number().min(0, "El enganche no puede ser negativo"),
+// Schema base sin refinamientos para poder extenderlo
+const BaseFormSchemaCore = z.object({
+  vehicle_value: z.coerce.number()
+    .min(50000, "El valor del vehículo debe ser mayor a $50,000")
+    .max(5000000, "El valor del vehículo no puede exceder $5,000,000"),
+  down_payment_amount: z.coerce.number()
+    .min(0, "El enganche no puede ser negativo")
+    .max(5000000, "El enganche no puede exceder $5,000,000"),
   insurance_mode: z.enum(["cash", "financed"]),
-  insurance_amount: z.coerce.number().min(0, "El monto del seguro no puede ser negativo"),
+  insurance_amount: z.coerce.number()
+    .min(0, "El monto del seguro no puede ser negativo")
+    .max(500000, "El monto del seguro no puede exceder $500,000"),
   commission_mode: z.enum(["cash", "financed"]),
 });
 
-const ClientFormSchema = BaseFormSchema.extend({
-  client_name: z.string().min(2, "El nombre es requerido"),
-  client_phone: z.string().min(10, "El teléfono debe tener al menos 10 dígitos"),
-  client_email: z.string().email("Email inválido").optional().or(z.literal("")),
-  
+// Schema con refinamientos para validaciones de negocio
+const BaseFormSchema = BaseFormSchemaCore.refine((data) => {
+  // Validar que el enganche sea al menos 30% del valor del vehículo
+  const minDownPayment = data.vehicle_value * 0.30;
+  return data.down_payment_amount >= minDownPayment;
+}, {
+  message: "El enganche debe ser al menos 30% del valor del vehículo",
+  path: ["down_payment_amount"]
+}).refine((data) => {
+  // Validar que el enganche no exceda el valor del vehículo
+  return data.down_payment_amount < data.vehicle_value;
+}, {
+  message: "El enganche no puede ser mayor o igual al valor del vehículo",
+  path: ["down_payment_amount"]
+});
+
+const ClientFormSchemaBase = BaseFormSchemaCore.extend({
+  client_name: z.string()
+    .min(2, "El nombre es requerido")
+    .max(100, "El nombre no puede exceder 100 caracteres")
+    .regex(/^[a-zA-ZÀ-ÿ\s]+$/, "El nombre solo puede contener letras y espacios"),
+  client_phone: z.string()
+    .min(10, "El teléfono debe tener al menos 10 dígitos")
+    .max(20, "El teléfono no puede exceder 20 caracteres")
+    .regex(/^[\d\s\-\+\(\)]+$/, "El teléfono solo puede contener números, espacios, guiones, paréntesis y el símbolo +"),
+  client_email: z.string()
+    .email("Email inválido")
+    .max(100, "El email no puede exceder 100 caracteres")
+    .optional()
+    .or(z.literal("")),
+
   // Datos del vehículo para clientes
-  vehicle_brand: z.string().optional(),
-  vehicle_model: z.string().optional(),
-  vehicle_year: z.coerce.number().optional(),
-  
+  vehicle_brand: z.string()
+    .max(50, "La marca no puede exceder 50 caracteres")
+    .optional(),
+  vehicle_model: z.string()
+    .max(50, "El modelo no puede exceder 50 caracteres")
+    .optional(),
+  vehicle_year: z.coerce.number()
+    .min(1900, "El año debe ser posterior a 1900")
+    .max(new Date().getFullYear() + 1, "El año no puede ser muy futuro")
+    .optional(),
+
   // Agencia donde compra el vehículo
   dealer_agency: z.string().optional(),
-  
+
   // Checkboxes
   no_vehicle_yet: z.boolean().optional(),
-  privacy_consent: z.boolean().refine((val) => val === true, {
-    message: "Debes autorizar el uso de tu información personal"
-  }),
+  privacy_consent: z.boolean(),
 });
 
-const AgencyFormSchema = BaseFormSchema.extend({
-  client_name: z.string().min(2, "El nombre del cliente es requerido"),
-  client_phone: z.string().min(10, "El teléfono debe tener al menos 10 dígitos"),
-  client_email: z.string().email("Email inválido").optional().or(z.literal("")),
-  
+// Aplicar refinamientos después de la extensión
+const ClientFormSchema = ClientFormSchemaBase.refine((data) => {
+  // Validar que el enganche sea al menos 30% del valor del vehículo
+  const minDownPayment = data.vehicle_value * 0.30;
+  return data.down_payment_amount >= minDownPayment;
+}, {
+  message: "El enganche debe ser al menos 30% del valor del vehículo",
+  path: ["down_payment_amount"]
+}).refine((data) => {
+  // Validar que el enganche no exceda el valor del vehículo
+  return data.down_payment_amount < data.vehicle_value;
+}, {
+  message: "El enganche no puede ser mayor o igual al valor del vehículo",
+  path: ["down_payment_amount"]
+}).refine((data) => {
+  // Validar privacidad consent
+  return data.privacy_consent === true;
+}, {
+  message: "Debes autorizar el uso de tu información personal",
+  path: ["privacy_consent"]
+});
+
+const AgencyFormSchemaBase = BaseFormSchemaCore.extend({
+  client_name: z.string()
+    .min(2, "El nombre del cliente es requerido")
+    .max(100, "El nombre no puede exceder 100 caracteres")
+    .regex(/^[a-zA-ZÀ-ÿ\s]+$/, "El nombre solo puede contener letras y espacios"),
+  client_phone: z.string()
+    .min(10, "El teléfono debe tener al menos 10 dígitos")
+    .max(20, "El teléfono no puede exceder 20 caracteres")
+    .regex(/^[\d\s\-\+\(\)]+$/, "El teléfono solo puede contener números, espacios, guiones, paréntesis y el símbolo +"),
+  client_email: z.string()
+    .email("Email inválido")
+    .max(100, "El email no puede exceder 100 caracteres")
+    .optional()
+    .or(z.literal("")),
+
   // Campo de vendedor para agencias
   vendor_name: z.string().optional(),
-  
+
   // Datos del vehículo para agencias (similar a clientes)
-  vehicle_brand: z.string().optional(),
-  vehicle_model: z.string().optional(),
-  vehicle_year: z.coerce.number().optional(),
-  
+  vehicle_brand: z.string()
+    .max(50, "La marca no puede exceder 50 caracteres")
+    .optional(),
+  vehicle_model: z.string()
+    .max(50, "El modelo no puede exceder 50 caracteres")
+    .optional(),
+  vehicle_year: z.coerce.number()
+    .min(1900, "El año debe ser posterior a 1900")
+    .max(new Date().getFullYear() + 1, "El año no puede ser muy futuro")
+    .optional(),
+
   // Checkboxes
   no_vehicle_yet: z.boolean().optional(),
 });
 
-const AsesorFormSchema = BaseFormSchema.extend({
+// Aplicar refinamientos después de la extensión
+const AgencyFormSchema = AgencyFormSchemaBase.refine((data) => {
+  // Validar que el enganche sea al menos 30% del valor del vehículo
+  const minDownPayment = data.vehicle_value * 0.30;
+  return data.down_payment_amount >= minDownPayment;
+}, {
+  message: "El enganche debe ser al menos 30% del valor del vehículo",
+  path: ["down_payment_amount"]
+}).refine((data) => {
+  // Validar que el enganche no exceda el valor del vehículo
+  return data.down_payment_amount < data.vehicle_value;
+}, {
+  message: "El enganche no puede ser mayor o igual al valor del vehículo",
+  path: ["down_payment_amount"]
+});
+
+const AsesorFormSchemaBase = BaseFormSchemaCore.extend({
   client_name: z.string().min(2, "El nombre del cliente es requerido"),
   client_phone: z.string().min(10, "El teléfono debe tener al menos 10 dígitos"),
   client_email: z.string().email("Email inválido").optional().or(z.literal("")),
@@ -69,6 +161,22 @@ const AsesorFormSchema = BaseFormSchema.extend({
   vehicle_usage: z.string().optional(),
   vehicle_origin: z.string().optional(),
   serial_number: z.string().optional(),
+});
+
+// Aplicar refinamientos después de la extensión
+const AsesorFormSchema = AsesorFormSchemaBase.refine((data) => {
+  // Validar que el enganche sea al menos 30% del valor del vehículo
+  const minDownPayment = data.vehicle_value * 0.30;
+  return data.down_payment_amount >= minDownPayment;
+}, {
+  message: "El enganche debe ser al menos 30% del valor del vehículo",
+  path: ["down_payment_amount"]
+}).refine((data) => {
+  // Validar que el enganche no exceda el valor del vehículo
+  return data.down_payment_amount < data.vehicle_value;
+}, {
+  message: "El enganche no puede ser mayor o igual al valor del vehículo",
+  path: ["down_payment_amount"]
 });
 
 // Tipo unión que incluye todos los campos posibles

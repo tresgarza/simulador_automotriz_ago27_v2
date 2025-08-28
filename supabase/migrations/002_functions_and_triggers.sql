@@ -141,3 +141,25 @@ SELECT
 FROM z_auto_simulations s
 JOIN z_auto_quotes q ON s.quote_id = q.id
 JOIN z_auto_rate_tiers r ON s.tier_code = r.tier_code;
+
+-- =========================================
+-- TRIGGERS ADICIONALES PARA NUEVAS TABLAS
+-- =========================================
+
+-- Trigger de auditoría para z_auto_exports_generated
+DROP TRIGGER IF EXISTS audit_z_auto_exports_generated ON z_auto_exports_generated;
+CREATE TRIGGER audit_z_auto_exports_generated
+    AFTER INSERT OR UPDATE OR DELETE ON z_auto_exports_generated
+    FOR EACH ROW EXECUTE FUNCTION audit_trigger_function();
+
+-- Trigger de auditoría para z_auto_pdfs_generated
+DROP TRIGGER IF EXISTS audit_z_auto_pdfs_generated ON z_auto_pdfs_generated;
+CREATE TRIGGER audit_z_auto_pdfs_generated
+    AFTER INSERT OR UPDATE OR DELETE ON z_auto_pdfs_generated
+    FOR EACH ROW EXECUTE FUNCTION audit_trigger_function();
+
+-- Trigger de auditoría para z_auto_authorization_requests
+DROP TRIGGER IF EXISTS audit_z_auto_authorization_requests ON z_auto_authorization_requests;
+CREATE TRIGGER audit_z_auto_authorization_requests
+    AFTER INSERT OR UPDATE OR DELETE ON z_auto_authorization_requests
+    FOR EACH ROW EXECUTE FUNCTION audit_trigger_function();

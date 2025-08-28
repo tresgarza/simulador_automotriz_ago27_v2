@@ -62,15 +62,18 @@ interface SummaryCardProps {
   // Datos del vendedor/agencia
   vendorName?: string;
   dealerAgency?: string;
+  // IDs para tracking
+  currentQuoteId?: string | null;
+  selectedSimulationId?: string | null;
 }
 
-export function SummaryCard({ 
-  result, 
-  isComparative = false, 
-  vehicleValue, 
-  downPayment, 
-  insuranceAmount, 
-  insuranceMode, 
+export function SummaryCard({
+  result,
+  isComparative = false,
+  vehicleValue,
+  downPayment,
+  insuranceAmount,
+  insuranceMode,
   commissionMode,
   clientName,
   clientPhone,
@@ -79,7 +82,9 @@ export function SummaryCard({
   vehicleModel,
   vehicleYear,
   vendorName,
-  dealerAgency
+  dealerAgency,
+  currentQuoteId,
+  selectedSimulationId
 }: SummaryCardProps) {
   if (!result) {
     return (
@@ -97,8 +102,8 @@ export function SummaryCard({
 
   // Always show matrix now - we compute all plans by default
   return (
-    <PlansMatrix 
-      result={result as MatrixResult} 
+    <PlansMatrix
+      result={result as MatrixResult}
       vehicleValue={vehicleValue}
       downPayment={downPayment}
       insuranceAmount={insuranceAmount}
@@ -112,6 +117,8 @@ export function SummaryCard({
       vehicleYear={vehicleYear}
       vendorName={vendorName}
       dealerAgency={dealerAgency}
+      currentQuoteId={currentQuoteId}
+      selectedSimulationId={selectedSimulationId}
     />
   );
 }

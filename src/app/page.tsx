@@ -169,15 +169,24 @@ export default function Home() {
             amortizationSchedule: apiResult.schedule,
           };
 
-          await fetch('/api/simulations/save', {
+          const response = await fetch('/api/simulations/save', {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
             },
             body: JSON.stringify(simulationData),
           });
+          
+          if (!response.ok) {
+            const errorData = await response.json();
+            console.error('❌ Error saving simulation:', errorData);
+            console.error('📊 Simulation data that failed:', simulationData);
+          } else {
+            const result = await response.json();
+            console.log('✅ Simulation saved successfully:', result);
+          }
         } catch (error) {
-          console.error('Error saving simulation:', error);
+          console.error('❌ Network error saving simulation:', error);
         }
       }
     }
