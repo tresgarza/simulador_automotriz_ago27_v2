@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import Image from "next/image";
 import { brand } from "@/styles/theme";
 import { EnhancedQuoteForm, type EnhancedFormData } from "@/components/form/EnhancedQuoteForm";
@@ -200,9 +200,7 @@ export default function Home() {
     try {
       // Guardar cotización en base de datos
       const quoteId = await saveQuoteToDatabase(data);
-      if (quoteId) {
-        setCurrentQuoteId(quoteId);
-      }
+      // Quote ID saved for future reference
 
       // Obtener tasas disponibles según el tipo de usuario
       const availableRates = getAvailableRates();

@@ -1,10 +1,10 @@
 "use client";
+import React, { useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { formatMXN, formatPercent, cn } from "@/lib/utils";
 import { Calculator, Car, DollarSign, Shield, Info, HelpCircle, CreditCard } from "lucide-react";
-import { useState } from "react";
 
 const FormSchema = z.object({
   vehicle_value: z.coerce.number().min(10000, "El valor del vehículo debe ser mayor a $10,000"),

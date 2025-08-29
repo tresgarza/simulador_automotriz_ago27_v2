@@ -1,7 +1,7 @@
-import { supabaseClient, AuthorizationRequest } from './supabase'
+import { supabaseClient, AuthorizationRequest } from '../lib/supabase'
 
 // Re-export types for convenience
-export type { AuthorizationRequest } from './supabase'
+export type { AuthorizationRequest } from '../lib/supabase'
 
 export class AuthorizationService {
 

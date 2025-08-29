@@ -6,6 +6,7 @@ import { SimulationService, SimulationWithQuote } from "../../../lib/simulation-
 import { formatMXN } from "@/lib/utils";
 import { AuthorizationForm } from "../../components/authorization/AuthorizationForm";
 import { AuthorizationRequest } from "../../../lib/supabase";
+import { SimulationData } from "../../components/authorization/AuthorizationForm";
 
 // AuthorizationRequest interface - extended for page needs
 interface PageAuthorizationRequest {
@@ -389,7 +390,15 @@ export default function AutorizacionesPage() {
       {/* Authorization Form Modal */}
       {showAuthorizationForm && selectedRequest && selectedRequest.simulation && (
         <AuthorizationForm
-          request={selectedRequest as any}
+          request={{
+            id: selectedRequest.id,
+            simulation: selectedRequest.simulation as unknown as SimulationData,
+            status: selectedRequest.status,
+            createdAt: selectedRequest.createdAt,
+            updatedAt: selectedRequest.updatedAt,
+            reviewerId: selectedRequest.reviewerId,
+            reviewerName: selectedRequest.reviewerName
+          }}
           onClose={handleCloseAuthorizationForm}
         />
       )}

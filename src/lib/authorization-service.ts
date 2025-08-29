@@ -1,4 +1,4 @@
-import { supabaseClient, AuthorizationRequest } from './supabase'
+import { supabaseClient, AuthorizationRequest } from '../../lib/supabase'
 
 // AuthorizationRequest interface moved to supabase.ts
 

@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { BarChart3, Users, Calculator, FileText, TrendingUp, Download, Search } from "lucide-react";
 import { SimulationService, SimulationWithQuote } from "../../../lib/simulation-service";
 import { useAuth } from "../../../lib/auth";
@@ -27,13 +27,7 @@ export function AsesorDashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'overview' | 'simulations' | 'reports'>('overview');
 
-  useEffect(() => {
-    if (isAsesor && user) {
-      loadDashboardData();
-    }
-  }, [isAsesor, user, loadDashboardData]);
-
-  const loadDashboardData = async () => {
+  const loadDashboardData = useCallback(async () => {
     setIsLoading(true);
     try {
       // Cargar estadísticas
@@ -48,7 +42,13 @@ export function AsesorDashboard() {
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [user, isAsesor]);
+
+  useEffect(() => {
+    if (isAsesor && user) {
+      loadDashboardData();
+    }
+  }, [isAsesor, user, loadDashboardData]);
 
   const handleSearch = async () => {
     if (!searchTerm.trim()) {
