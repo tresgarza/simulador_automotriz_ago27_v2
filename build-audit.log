@@ -1,0 +1,43 @@
+
+> simulador@0.1.0 build
+> next build
+
+   ▲ Next.js 15.4.6
+   - Environments: .env.local, .env
+
+   Creating an optimized production build ...
+ ✓ Compiled successfully in 2000ms
+   Linting and checking validity of types ...
+
+Failed to compile.
+
+./src/app/api/fix-rls/route.ts
+4:28  Warning: 'request' is defined but never used.  @typescript-eslint/no-unused-vars
+41:17  Warning: 'data' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+
+./src/app/autorizaciones/page.tsx
+8:10  Warning: 'AuthorizationRequest' is defined but never used.  @typescript-eslint/no-unused-vars
+392:39  Error: Unexpected any. Specify a different type.  @typescript-eslint/no-explicit-any
+
+./src/app/enhanced-page.tsx
+2:20  Warning: 'useEffect' is defined but never used.  @typescript-eslint/no-unused-vars
+
+./src/components/auth/LoginModal.tsx
+44:14  Warning: 'err' is defined but never used.  @typescript-eslint/no-unused-vars
+
+./src/components/dashboard/AsesorDashboard.tsx
+36:9  Warning: The 'loadDashboardData' function makes the dependencies of useEffect Hook (at line 34) change on every render. To fix this, wrap the definition of 'loadDashboardData' in its own useCallback() Hook.  react-hooks/exhaustive-deps
+
+./src/components/pdf/ProfessionalPDFGenerator.tsx
+79:5  Warning: 'clientPhone' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+80:5  Warning: 'clientEmail' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+229:12  Warning: 'error' is defined but never used.  @typescript-eslint/no-unused-vars
+838:12  Warning: 'error' is defined but never used.  @typescript-eslint/no-unused-vars
+
+./src/components/summary/SummaryCard.tsx
+72:3  Warning: 'isComparative' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+
+./src/components/ui/button.tsx
+38:32  Warning: 'asChild' is assigned a value but never used.  @typescript-eslint/no-unused-vars
+
+info  - Need to disable some ESLint rules? Learn more here: https://nextjs.org/docs/app/api-reference/config/eslint#disabling-rules

@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import React, { useState } from "react";
 import { X, User, Building2, Mail, Phone, Key } from "lucide-react";
 import { AuthService } from "../../../lib/auth";
 

@@ -1,14 +1,13 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useForm, useFieldArray } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
-  X, User, Car, DollarSign, Building2, FileCheck, Plus, Minus,
-  Calculator, TrendingUp, TrendingDown, Banknote, CreditCard, PiggyBank
+  X, User, Car, Building2, FileCheck, Plus, Minus,
+  Calculator, TrendingUp, CreditCard, PiggyBank
 } from "lucide-react";
 import { formatMXN, cn } from "@/lib/utils";
-import { supabase } from "../../../../lib/supabase";
 
 // Schema para el formulario de autorización
 const AuthorizationSchema = z.object({
@@ -54,9 +53,31 @@ const AuthorizationSchema = z.object({
 
 type AuthorizationFormData = z.infer<typeof AuthorizationSchema>;
 
+interface SimulationData {
+  id: string;
+  monthlyPayment?: number;
+  totalAmount?: number;
+  interestRate?: number;
+  termMonths?: number;
+  annual_rate?: number;
+  term_months?: number;
+  pmt_total_month2?: number;
+  monthly_payment?: number;
+  financed_amount?: number;
+  z_auto_quotes?: Array<Record<string, unknown>>;
+  quote?: {
+    client_name?: string;
+    vehicle_value?: number;
+    vehicle_brand?: string;
+    vehicle_model?: string;
+    vehicle_year?: number;
+  } | Record<string, unknown>;
+  [key: string]: unknown;
+}
+
 interface AuthorizationRequest {
   id: string;
-  simulation: Record<string, any>;
+  simulation: SimulationData;
   status: 'pending' | 'approved' | 'rejected';
   createdAt: string;
   updatedAt?: string;
@@ -82,31 +103,53 @@ const maritalStatuses = {
   viudo: "Viudo"
 };
 
+// Helper function to extract quote data safely
+const getQuoteData = (simulation: SimulationData) => {
+  // Try direct quote property first
+  if (simulation.quote) {
+    return simulation.quote;
+  }
+
+  // Try z_auto_quotes array
+  if (simulation.z_auto_quotes && Array.isArray(simulation.z_auto_quotes) && simulation.z_auto_quotes.length > 0) {
+    return simulation.z_auto_quotes[0] as Record<string, unknown>;
+  }
+
+  // For API responses that might have different structure
+  if (simulation.id && typeof simulation === 'object') {
+    // Return simulation itself as it might contain the needed fields
+    return simulation as Record<string, unknown>;
+  }
+
+  return {};
+};
+
 export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [step, setStep] = useState(1);
   const totalSteps = 3;
 
+  const quoteData = getQuoteData(request.simulation);
+
   const {
     register,
     handleSubmit,
     watch,
-    setValue,
     control,
     formState: { errors }
   } = useForm({
     resolver: zodResolver(AuthorizationSchema),
     defaultValues: {
       // Pre-llenar con datos de la simulación
-      applicant_name: request.simulation.quote.client_name || "",
-      requested_amount: request.simulation.quote.vehicle_value || 0,
+      applicant_name: (quoteData.client_name as string) || "",
+      requested_amount: Number(quoteData.vehicle_value) || 0,
       term_months: request.simulation.term_months || 48,
-      interest_rate: request.simulation.annual_rate * 100 || 45,
+      interest_rate: (request.simulation.annual_rate || 0.45) * 100,
       opening_fee: 3, // 3% por defecto
-      vehicle_brand: request.simulation.quote.vehicle_brand || "",
-      vehicle_model: request.simulation.quote.vehicle_model || "",
-      vehicle_year: request.simulation.quote.vehicle_year || new Date().getFullYear(),
-      sale_value: request.simulation.quote.vehicle_value || 0,
+      vehicle_brand: (quoteData.vehicle_brand as string) || "",
+      vehicle_model: (quoteData.vehicle_model as string) || "",
+      vehicle_year: Number(quoteData.vehicle_year) || new Date().getFullYear(),
+      sale_value: Number(quoteData.vehicle_value) || 0,
       incomes: [{ type: "nomina", period: "", amount: 0 }],
       commitments: 0,
       personal_expenses: 0,
@@ -126,14 +169,13 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
   const watchedCommitments = watch("commitments");
   const watchedPersonalExpenses = watch("personal_expenses");
   const watchedBusinessExpenses = watch("business_expenses");
-  const watchedMonthlySalary = watch("monthly_salary");
   const watchedMonthlyCapacity = watch("monthly_capacity");
 
   // Calcular total de ingresos
-  const totalIncome = watchedIncomes?.reduce((sum, income) => sum + (income.amount || 0), 0) || 0;
-  const totalExpenses = (watchedCommitments || 0) + (watchedPersonalExpenses || 0) + (watchedBusinessExpenses || 0);
+  const totalIncome = watchedIncomes?.reduce((sum, income) => sum + (Number(income.amount) || 0), 0) || 0;
+  const totalExpenses = (Number(watchedCommitments) || 0) + (Number(watchedPersonalExpenses) || 0) + (Number(watchedBusinessExpenses) || 0);
   const availableIncome = totalIncome - totalExpenses;
-  const capacityPercentage = availableIncome > 0 ? (watchedMonthlyCapacity / availableIncome) * 100 : 0;
+  const capacityPercentage = availableIncome > 0 ? (Number(watchedMonthlyCapacity) / availableIncome) * 100 : 0;
 
   const onSubmit = async (data: AuthorizationFormData) => {
     setIsSubmitting(true);
@@ -178,7 +220,7 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
                 Formulario de Autorización
               </h2>
               <p className="text-emerald-100 mt-1">
-                Solicitud de {request.simulation.quote.client_name || 'Cliente Anónimo'}
+                Solicitud de {(quoteData.client_name as string) || 'Cliente Anónimo'}
               </p>
             </div>
             <button
@@ -213,7 +255,7 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
 
         {/* Form Content */}
         <div className="p-8 overflow-y-auto max-h-[calc(90vh-200px)]">
-          <form onSubmit={handleSubmit(onSubmit as any)} className="space-y-8">
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
             {/* Step 1: Datos del Solicitante */}
             {step === 1 && (
               <div className="space-y-6">
@@ -597,7 +639,7 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
                     <div className="space-y-3">
                       <div className="flex justify-between">
                         <span className="text-gray-700">Capacidad de Pago:</span>
-                        <span className="font-semibold">{formatMXN(watchedMonthlyCapacity || 0)}</span>
+                        <span className="font-semibold">{formatMXN(Number(watchedMonthlyCapacity) || 0)}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-gray-700">Capacidad 40%:</span>

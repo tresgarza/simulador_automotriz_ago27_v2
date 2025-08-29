@@ -70,7 +70,7 @@ export function calculateAmortization(inputs: AmortizationInputs): AmortizationR
   const amountToFinance = vehiclePrice - downPayment; // 300,000 - 100,000 = 200,000
   
   // Calcular comisión
-  const openingFee = roundTo2(amountToFinance * openingFeePercentage / (1 - openingFeePercentage)); // 3% del monto financiado
+  const openingFee = roundTo2(amountToFinance * openingFeePercentage); // 3% del monto financiado
   const openingFeeIVA = roundTo2(openingFee * ivaRate); // IVA de la comisión
   
   // Monto financiado según el modo de comisión
@@ -96,14 +96,13 @@ export function calculateAmortization(inputs: AmortizationInputs): AmortizationR
   const insuranceMonthly = (insuranceFinanced * 1.3047) / 12; // 25,000 * 1.3047 / 12 = 2,718.125
 
   // 6. Pago mensual constante usando PMT (como Excel) - sobre el monto financiado SIN seguros
-  const monthlyRateWithIVA = annualRateWithIVA / 12;
-  const monthlyPayment = roundTo2(Math.abs(PMT(monthlyRateWithIVA, termMonths, -financedAmount)));
+  const monthlyRateWithoutIVA = annualRate / 12;
+  const monthlyPayment = roundTo2(Math.abs(PMT(monthlyRateWithoutIVA, termMonths, -financedAmount)));
 
   // IMPORTANTE: El PMT se calcula solo sobre el financedAmount (206,185.57)
   // Los seguros se agregan por separado al pago total, pero NO al flujo de efectivo para TIR
 
   // 7. Pago base (sin extras) - usando solo el monto financiado sin seguros
-  const monthlyRateWithoutIVA = annualRate / 12;
   const pmtBase = roundTo2(Math.abs(PMT(monthlyRateWithoutIVA, termMonths, -financedAmount)));
 
   // 7. Desembolso inicial

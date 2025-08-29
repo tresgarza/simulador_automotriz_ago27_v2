@@ -119,3 +119,32 @@ export interface RateTier {
   created_at: string
   updated_at: string
 }
+
+export interface AuthorizationRequest {
+  id: string
+  simulation_id: string
+  quote_id: string
+  status: 'pending' | 'in_review' | 'approved' | 'rejected' | 'cancelled'
+  priority: 'low' | 'medium' | 'high' | 'urgent'
+  client_name?: string
+  client_email?: string
+  client_phone?: string
+  vehicle_brand?: string
+  vehicle_model?: string
+  vehicle_year?: number
+  vehicle_value?: number
+  requested_amount?: number
+  monthly_payment?: number
+  term_months?: number
+  agency_name?: string
+  dealer_name?: string
+  dealer_phone?: string
+  dealer_email?: string
+  internal_notes?: string
+  created_by_user_id: string
+  assigned_to_user_id?: string
+  reviewer_id?: string
+  reviewer_name?: string
+  created_at: string
+  updated_at: string
+}

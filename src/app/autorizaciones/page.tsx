@@ -1,34 +1,33 @@
 "use client";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { FileCheck, Users, Search, Filter, Eye, CheckCircle, XCircle, Clock, ChevronRight } from "lucide-react";
+import { FileCheck, Users, Search, Eye, CheckCircle, XCircle, Clock, ChevronRight } from "lucide-react";
 import { useAuth } from "../../../lib/auth";
 import { SimulationService, SimulationWithQuote } from "../../../lib/simulation-service";
 import { formatMXN } from "@/lib/utils";
 import { AuthorizationForm } from "../../components/authorization/AuthorizationForm";
+import { AuthorizationRequest } from "../../../lib/supabase";
+import { SimulationData } from "../../components/authorization/AuthorizationForm";
 
-interface AuthorizationRequest {
+// AuthorizationRequest interface - extended for page needs
+interface PageAuthorizationRequest {
   id: string;
-  simulation: SimulationWithQuote;
-  status: 'pending' | 'approved' | 'rejected' | 'in_review' | 'cancelled';
+  simulation_id?: string;
+  simulation?: SimulationWithQuote;
+  status: 'pending' | 'approved' | 'rejected';
   createdAt: string;
   updatedAt?: string;
   reviewerId?: string;
   reviewerName?: string;
-  priority?: 'low' | 'medium' | 'high' | 'urgent';
-  riskLevel?: 'low' | 'medium' | 'high';
-  clientComments?: string;
-  internalNotes?: string;
-  approvalNotes?: string;
 }
 
 export default function AutorizacionesPage() {
   const { user, isAsesor } = useAuth();
-  const [requests, setRequests] = useState<AuthorizationRequest[]>([]);
-  const [filteredRequests, setFilteredRequests] = useState<AuthorizationRequest[]>([]);
+  const [requests, setRequests] = useState<PageAuthorizationRequest[]>([]);
+  const [filteredRequests, setFilteredRequests] = useState<PageAuthorizationRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
-  const [selectedRequest, setSelectedRequest] = useState<AuthorizationRequest | null>(null);
+  const [selectedRequest, setSelectedRequest] = useState<PageAuthorizationRequest | null>(null);
   const [showAuthorizationForm, setShowAuthorizationForm] = useState(false);
   const [isHydrated, setIsHydrated] = useState(false);
   const [isLoadingData, setIsLoadingData] = useState(false);
@@ -50,18 +49,19 @@ export default function AutorizacionesPage() {
       filtered = filtered.filter(request => request.status === statusFilter);
     }
 
-    // Filter by search term
+    // Filter by search term (simplified for now - can be enhanced when API includes more data)
     if (searchTerm.trim()) {
       const searchLower = searchTerm.toLowerCase();
       filtered = filtered.filter(request => {
-        const quote = request.simulation?.quote;
-        return (
-          quote?.client_name?.toLowerCase().includes(searchLower) ||
-          quote?.client_email?.toLowerCase().includes(searchLower) ||
-          quote?.client_phone?.includes(searchTerm) ||
-          quote?.vehicle_brand?.toLowerCase().includes(searchLower) ||
-          quote?.vehicle_model?.toLowerCase().includes(searchLower)
-        );
+        // Search in available fields from authorization request
+        const searchableText = [
+          request.id,
+          request.status,
+          request.reviewerName,
+          // Add more searchable fields as API provides them
+        ].filter(Boolean).join(' ').toLowerCase();
+
+        return searchableText.includes(searchLower);
       });
     }
 
@@ -74,46 +74,15 @@ export default function AutorizacionesPage() {
     setIsLoadingData(true);
     setIsLoading(true);
     try {
-      // Cargar solicitudes de autorización reales de la base de datos
-      const response = await fetch('/api/authorization-requests?limit=100');
-      const result = await response.json();
+      // Por ahora cargamos todas las simulaciones como solicitudes pendientes
+      // En el futuro esto debería ser una tabla específica de solicitudes de autorización
+      const simulations = await SimulationService.getUserSimulations(user.id, 'asesor');
 
-      if (!response.ok) {
-        throw new Error(result.error || 'Error al cargar solicitudes de autorización');
-      }
-
-      // Transformar los datos para que coincidan con la interfaz AuthorizationRequest
-      const authorizationRequests: AuthorizationRequest[] = result.authorization_requests.map((authReq: any) => ({
-        id: authReq.id,
-        simulation: {
-          id: authReq.z_auto_simulations.id,
-          tier_code: authReq.z_auto_simulations.tier_code,
-          term_months: authReq.z_auto_simulations.term_months,
-          monthly_payment: authReq.z_auto_simulations.monthly_payment,
-          total_to_finance: authReq.z_auto_simulations.total_to_finance,
-          calculated_at: authReq.created_at,
-          quote: {
-            id: authReq.z_auto_quotes.id,
-            client_name: authReq.z_auto_quotes.client_name,
-            client_email: authReq.z_auto_quotes.client_email,
-            client_phone: authReq.z_auto_quotes.client_phone,
-            vehicle_brand: authReq.z_auto_quotes.vehicle_brand,
-            vehicle_model: authReq.z_auto_quotes.vehicle_model,
-            vehicle_year: authReq.z_auto_quotes.vehicle_year,
-            vehicle_value: authReq.z_auto_quotes.vehicle_value,
-            created_at: authReq.z_auto_quotes.created_at
-          }
-        },
-        status: authReq.status,
-        createdAt: authReq.created_at,
-        updatedAt: authReq.updated_at,
-        reviewerId: authReq.assigned_to_user_id,
-        reviewerName: authReq.assigned_to?.name,
-        priority: authReq.priority,
-        riskLevel: authReq.risk_level,
-        clientComments: authReq.client_comments,
-        internalNotes: authReq.internal_notes,
-        approvalNotes: authReq.approval_notes
+      const authorizationRequests: PageAuthorizationRequest[] = simulations.map(simulation => ({
+        id: simulation.id,
+        simulation,
+        status: 'pending' as const,
+        createdAt: simulation.calculated_at
       }));
 
       setRequests(authorizationRequests);
@@ -142,7 +111,7 @@ export default function AutorizacionesPage() {
         loadAuthorizationRequests();
       }
     }
-  }, [isAsesor, user, isHydrated]); // Simplified dependencies
+  }, [isAsesor, user, isHydrated, loadAuthorizationRequests]); // Include loadAuthorizationRequests dependency
 
   // Reset loading ref when user changes
   useEffect(() => {
@@ -155,7 +124,7 @@ export default function AutorizacionesPage() {
     }
   }, [filterRequests, isHydrated]);
 
-  const handleAuthorizeRequest = (request: AuthorizationRequest) => {
+  const handleAuthorizeRequest = (request: PageAuthorizationRequest) => {
     setSelectedRequest(request);
     setShowAuthorizationForm(true);
   };
@@ -314,7 +283,7 @@ export default function AutorizacionesPage() {
               ].map((filter) => (
                 <button
                   key={filter.value}
-                  onClick={() => setStatusFilter(filter.value as any)}
+                  onClick={() => setStatusFilter(filter.value as 'pending' | 'approved' | 'rejected')}
                   className={`px-4 py-3 rounded-xl font-medium transition-colors ${
                     statusFilter === filter.value
                       ? 'bg-emerald-600 text-white'
@@ -419,9 +388,17 @@ export default function AutorizacionesPage() {
       </div>
 
       {/* Authorization Form Modal */}
-      {showAuthorizationForm && selectedRequest && (
+      {showAuthorizationForm && selectedRequest && selectedRequest.simulation && (
         <AuthorizationForm
-          request={selectedRequest}
+          request={{
+            id: selectedRequest.id,
+            simulation: selectedRequest.simulation as unknown as SimulationData,
+            status: selectedRequest.status,
+            createdAt: selectedRequest.createdAt,
+            updatedAt: selectedRequest.updatedAt,
+            reviewerId: selectedRequest.reviewerId,
+            reviewerName: selectedRequest.reviewerName
+          }}
           onClose={handleCloseAuthorizationForm}
         />
       )}

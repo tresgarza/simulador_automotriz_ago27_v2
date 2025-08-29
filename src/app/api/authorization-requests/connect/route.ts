@@ -51,19 +51,26 @@ export async function POST(request: NextRequest) {
     console.log('🔍 Simulaciones encontradas:', simulations?.length || 0);
 
     // Buscar la simulación que mejor coincida con el nombre del cliente
-    const matchingSimulation = simulations?.find(sim => 
-      sim.z_auto_quotes?.client_name?.toLowerCase().trim().includes(client_name.toLowerCase().trim()) ||
-      client_name.toLowerCase().trim().includes(sim.z_auto_quotes?.client_name?.toLowerCase().trim() || '')
-    );
+    const matchingSimulation = simulations?.find(sim => {
+      const quotes = sim.z_auto_quotes as unknown as Array<Record<string, unknown>> || []
+      const quote = quotes[0] || {}
+      const clientName = (quote.client_name as string) || ''
+      return clientName.toLowerCase().trim().includes(client_name.toLowerCase().trim()) ||
+             client_name.toLowerCase().trim().includes(clientName.toLowerCase().trim())
+    });
 
     if (!matchingSimulation) {
       console.warn('⚠️ No se encontró simulación que coincida para:', { client_name, tier_code, term_months });
-      console.log('🔍 Simulaciones disponibles:', simulations?.map(s => ({ 
-        id: s.id, 
-        client: s.z_auto_quotes?.client_name, 
-        tier: s.tier_code, 
-        term: s.term_months 
-      })));
+      console.log('🔍 Simulaciones disponibles:', simulations?.map(s => {
+        const quotes = s.z_auto_quotes as unknown as Array<Record<string, unknown>> || []
+        const quote = quotes[0] || {}
+        return {
+          id: s.id,
+          client: quote.client_name,
+          tier: s.tier_code,
+          term: s.term_months
+        }
+      }));
       return NextResponse.json(
         { error: 'No se encontró simulación que coincida con los criterios' },
         { status: 404 }
@@ -79,13 +86,19 @@ export async function POST(request: NextRequest) {
         simulation_id: matchingSimulation.id,
         quote_id: matchingSimulation.quote_id,
         monthly_payment: matchingSimulation.pmt_total_month2 || matchingSimulation.monthly_payment,
-        vehicle_brand: matchingSimulation.z_auto_quotes?.vehicle_brand,
-        vehicle_model: matchingSimulation.z_auto_quotes?.vehicle_model,
-        vehicle_year: matchingSimulation.z_auto_quotes?.vehicle_year,
-        vehicle_value: matchingSimulation.z_auto_quotes?.vehicle_value,
+        ...(() => {
+          const quotes = matchingSimulation.z_auto_quotes as unknown as Array<Record<string, unknown>> || []
+          const quote = quotes[0] || {}
+          return {
+            vehicle_brand: quote.vehicle_brand,
+            vehicle_model: quote.vehicle_model,
+            vehicle_year: quote.vehicle_year,
+            vehicle_value: quote.vehicle_value,
+            client_email: quote.client_email,
+            client_phone: quote.client_phone
+          }
+        })(),
         requested_amount: matchingSimulation.total_to_finance,
-        client_email: matchingSimulation.z_auto_quotes?.client_email,
-        client_phone: matchingSimulation.z_auto_quotes?.client_phone,
         internal_notes: 'Solicitud conectada automáticamente con simulación específica'
       })
       .eq('id', authorization_request_id)

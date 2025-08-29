@@ -1,37 +1,6 @@
-import { supabaseClient } from './supabase'
+import { supabaseClient, AuthorizationRequest } from '../../lib/supabase'
 
-export interface AuthorizationRequest {
-  id: string
-  simulation_id: string
-  quote_id: string
-  status: 'pending' | 'in_review' | 'approved' | 'rejected' | 'cancelled'
-  priority: 'low' | 'medium' | 'high' | 'urgent'
-  client_name?: string
-  client_email?: string
-  client_phone?: string
-  vehicle_brand?: string
-  vehicle_model?: string
-  vehicle_year?: number
-  vehicle_value?: number
-  requested_amount?: number
-  monthly_payment?: number
-  term_months?: number
-  agency_name?: string
-  dealer_name?: string
-  promoter_code?: string
-  created_by_user_id?: string
-  assigned_to_user_id?: string
-  client_comments?: string
-  internal_notes?: string
-  approval_notes?: string
-  risk_level: 'low' | 'medium' | 'high'
-  created_at: string
-  updated_at?: string
-  reviewed_at?: string
-  approved_at?: string
-  rejected_at?: string
-  authorization_data?: Record<string, unknown>
-}
+// AuthorizationRequest interface moved to supabase.ts
 
 export interface CreateAuthorizationRequestData {
   simulation_id: string
@@ -85,7 +54,7 @@ export class AuthorizationService {
     priority?: string
     limit?: number
     offset?: number
-  }): Promise<{ requests: AuthorizationRequest[], pagination: any }> {
+  }): Promise<{ requests: AuthorizationRequest[], pagination: { total: number; limit: number; offset: number } }> {
     const params = new URLSearchParams()
     
     if (filters?.status) params.append('status', filters.status)
@@ -150,7 +119,7 @@ export class AuthorizationService {
     return this.updateAuthorizationRequest(id, {
       assigned_to_user_id: assignedToUserId,
       status: 'in_review',
-      internal_notes
+      internal_notes: internalNotes
     })
   }
 

@@ -1,5 +1,6 @@
 "use client";
-import { useMemo, useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
+import Image from "next/image";
 import { brand } from "@/styles/theme";
 import { EnhancedQuoteForm, type EnhancedFormData } from "@/components/form/EnhancedQuoteForm";
 import { SummaryCard } from "@/components/summary/SummaryCard";
@@ -49,9 +50,7 @@ export default function EnhancedHome() {
   const [showResults, setShowResults] = useState(false);
   const [formData, setFormData] = useState<EnhancedFormData | null>(null);
   const [showLoginModal, setShowLoginModal] = useState(false);
-  const [currentQuoteId, setCurrentQuoteId] = useState<string | null>(null);
-
-  const { user, isLoggedIn, isAsesor, isAgency, isClient, getAvailableRates } = useAuth();
+  const { user, isLoggedIn, isAsesor, isClient, getAvailableRates } = useAuth();
 
   const getRateForTier = (tier: string): number => {
     switch (tier) {
@@ -183,9 +182,7 @@ export default function EnhancedHome() {
     try {
       // Guardar cotización en base de datos
       const quoteId = await saveQuoteToDatabase(data);
-      if (quoteId) {
-        setCurrentQuoteId(quoteId);
-      }
+      // Quote ID saved for future reference
 
       // Obtener tasas disponibles según el tipo de usuario
       const availableRates = getAvailableRates();
@@ -293,9 +290,11 @@ export default function EnhancedHome() {
 
           {/* Logo de Financiera Incentiva */}
           <div className="mb-8 flex justify-center">
-            <img 
-              src="/logo_fincentiva_letra_blanca_flecha_verde.png" 
-              alt="Financiera Incentiva" 
+            <Image
+              src="/logo_fincentiva_letra_blanca_flecha_verde.png"
+              alt="Financiera Incentiva"
+              width={160}
+              height={160}
               className="h-32 sm:h-40 w-auto object-contain"
             />
           </div>

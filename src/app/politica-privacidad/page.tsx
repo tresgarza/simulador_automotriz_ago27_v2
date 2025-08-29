@@ -1,3 +1,5 @@
+import Link from 'next/link';
+
 export default function PoliticaPrivacidad() {
   return (
     <div className="min-h-screen bg-gray-50 py-12">
@@ -70,12 +72,12 @@ export default function PoliticaPrivacidad() {
           </div>
 
           <div className="mt-8 pt-6 border-t border-gray-200">
-            <a 
+            <Link
               href="/"
               className="inline-flex items-center px-6 py-3 bg-emerald-600 text-white rounded-2xl hover:bg-emerald-700 transition-colors"
             >
               ← Volver al Simulador
-            </a>
+            </Link>
           </div>
         </div>
       </div>
