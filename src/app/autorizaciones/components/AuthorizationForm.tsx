@@ -56,7 +56,7 @@ type AuthorizationFormData = z.infer<typeof AuthorizationSchema>;
 
 interface AuthorizationRequest {
   id: string;
-  simulation: any;
+  simulation: Record<string, any>;
   status: 'pending' | 'approved' | 'rejected';
   createdAt: string;
   updatedAt?: string;

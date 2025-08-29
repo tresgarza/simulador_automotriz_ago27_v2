@@ -30,7 +30,9 @@ export async function POST(request: NextRequest) {
       internal_notes,
       risk_level = 'medium',
       ip_address,
-      user_agent
+      user_agent,
+      // Datos adicionales del formulario de autorización
+      authorization_data
     } = body
 
     // Validaciones básicas
@@ -67,7 +69,8 @@ export async function POST(request: NextRequest) {
       internal_notes: internal_notes || null,
       risk_level,
       ip_address: ip_address || null,
-      user_agent: user_agent || null
+      user_agent: user_agent || null,
+      authorization_data: authorization_data || null
     }
 
     console.log('📝 [DEBUG] Inserting authorization request:', authRequestData)

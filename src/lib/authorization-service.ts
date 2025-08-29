@@ -30,7 +30,7 @@ export interface AuthorizationRequest {
   reviewed_at?: string
   approved_at?: string
   rejected_at?: string
-  authorization_data?: any
+  authorization_data?: Record<string, unknown>
 }
 
 export interface CreateAuthorizationRequestData {
@@ -39,7 +39,7 @@ export interface CreateAuthorizationRequestData {
   priority?: 'low' | 'medium' | 'high' | 'urgent'
   client_comments?: string
   risk_level?: 'low' | 'medium' | 'high'
-  authorization_data?: any
+  authorization_data?: Record<string, unknown>
   created_by_user_id?: string
 }
 
@@ -50,7 +50,7 @@ export interface UpdateAuthorizationRequestData {
   internal_notes?: string
   approval_notes?: string
   risk_level?: 'low' | 'medium' | 'high'
-  authorization_data?: any
+  authorization_data?: Record<string, unknown>
 }
 
 export class AuthorizationService {

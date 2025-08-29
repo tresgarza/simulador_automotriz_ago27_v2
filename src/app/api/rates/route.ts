@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Actualizar tasas
-    const updatePromises = rates.map((rate: any) => 
+    const updatePromises = rates.map((rate: Record<string, unknown>) => 
       supabaseClient
         .from('z_auto_rate_tiers')
         .update({
