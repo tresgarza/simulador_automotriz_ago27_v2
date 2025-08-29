@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { FileCheck, Users, Search, Filter, Eye, CheckCircle, XCircle, Clock, ChevronRight } from "lucide-react";
+import { FileCheck, Users, Search, Eye, CheckCircle, XCircle, Clock, ChevronRight } from "lucide-react";
 import { useAuth } from "../../../lib/auth";
 import { SimulationService, SimulationWithQuote } from "../../../lib/simulation-service";
 import { formatMXN } from "@/lib/utils";
@@ -106,7 +106,7 @@ export default function AutorizacionesPage() {
         loadAuthorizationRequests();
       }
     }
-  }, [isAsesor, user, isHydrated]); // Simplified dependencies
+  }, [isAsesor, user, isHydrated, loadAuthorizationRequests]); // Include loadAuthorizationRequests dependency
 
   // Reset loading ref when user changes
   useEffect(() => {
@@ -278,7 +278,7 @@ export default function AutorizacionesPage() {
               ].map((filter) => (
                 <button
                   key={filter.value}
-                  onClick={() => setStatusFilter(filter.value as any)}
+                  onClick={() => setStatusFilter(filter.value as 'pending' | 'approved' | 'rejected')}
                   className={`px-4 py-3 rounded-xl font-medium transition-colors ${
                     statusFilter === filter.value
                       ? 'bg-emerald-600 text-white'

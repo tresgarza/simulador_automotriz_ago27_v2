@@ -1,5 +1,6 @@
 "use client";
-import { useMemo, useState, useEffect } from "react";
+import { useState, useEffect } from "react";
+import Image from "next/image";
 import { brand } from "@/styles/theme";
 import { EnhancedQuoteForm, type EnhancedFormData } from "@/components/form/EnhancedQuoteForm";
 import { SummaryCard } from "@/components/summary/SummaryCard";
@@ -50,11 +51,10 @@ export default function Home() {
   const [showResults, setShowResults] = useState(false);
   const [formData, setFormData] = useState<EnhancedFormData | null>(null);
   const [showLoginModal, setShowLoginModal] = useState(false);
-  const [currentQuoteId, setCurrentQuoteId] = useState<string | null>(null);
   const [showDashboard, setShowDashboard] = useState(false);
   const [isClient, setIsClient] = useState(false);
 
-  const { user, isLoggedIn, isAsesor, isAgency, isClient: authIsClient, getAvailableRates } = useAuth();
+  const { user, isLoggedIn, isAsesor, isClient: authIsClient, getAvailableRates } = useAuth();
 
   // Evitar problemas de hidratación
   useEffect(() => {
@@ -341,9 +341,11 @@ export default function Home() {
 
           {/* Logo de Financiera Incentiva */}
           <div className="mb-8 flex justify-center">
-            <img 
-              src="/logo_fincentiva_letra_blanca_flecha_verde.png" 
-              alt="Financiera Incentiva" 
+            <Image
+              src="/logo_fincentiva_letra_blanca_flecha_verde.png"
+              alt="Financiera Incentiva"
+              width={160}
+              height={160}
               className="h-32 sm:h-40 w-auto object-contain"
             />
           </div>

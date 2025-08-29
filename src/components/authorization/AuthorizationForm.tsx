@@ -1,14 +1,13 @@
 "use client";
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import { useForm, useFieldArray } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import {
-  X, User, Car, DollarSign, Building2, FileCheck, Plus, Minus,
-  Calculator, TrendingUp, TrendingDown, Banknote, CreditCard, PiggyBank
+  X, User, Car, Building2, FileCheck, Plus, Minus,
+  Calculator, TrendingUp, CreditCard, PiggyBank
 } from "lucide-react";
 import { formatMXN, cn } from "../../lib/utils";
-import { supabase } from "../../lib/supabase";
 
 // Schema para el formulario de autorización
 const AuthorizationSchema = z.object({
@@ -54,9 +53,18 @@ const AuthorizationSchema = z.object({
 
 type AuthorizationFormData = z.infer<typeof AuthorizationSchema>;
 
+interface SimulationData {
+  id: string;
+  monthlyPayment: number;
+  totalAmount: number;
+  interestRate: number;
+  termMonths: number;
+  [key: string]: unknown;
+}
+
 interface AuthorizationRequest {
   id: string;
-  simulation: any;
+  simulation: SimulationData;
   status: 'pending' | 'approved' | 'rejected';
   createdAt: string;
   updatedAt?: string;
@@ -91,7 +99,6 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
     register,
     handleSubmit,
     watch,
-    setValue,
     control,
     formState: { errors }
   } = useForm({
@@ -126,7 +133,6 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
   const watchedCommitments = watch("commitments");
   const watchedPersonalExpenses = watch("personal_expenses");
   const watchedBusinessExpenses = watch("business_expenses");
-  const watchedMonthlySalary = watch("monthly_salary");
   const watchedMonthlyCapacity = watch("monthly_capacity");
 
   // Calcular total de ingresos
@@ -288,7 +294,7 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
 
         {/* Form Content */}
         <div className="p-8 overflow-y-auto max-h-[calc(90vh-200px)]">
-          <form onSubmit={handleSubmit(onSubmit as any)} className="space-y-8">
+          <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
             {/* Step 1: Datos del Solicitante */}
             {step === 1 && (
               <div className="space-y-6">

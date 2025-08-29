@@ -6,8 +6,7 @@ import { exportScheduleXLSX } from "@/csv/export";
 import { formatMXN } from "@/lib/utils";
 import { generateProfessionalPDF } from "@/components/pdf/ProfessionalPDFGenerator";
 import { useAuth } from "../../../lib/auth";
-import { AuthorizationService } from "../../../lib/authorization-service";
-import { AuthorizationForm } from "../authorization/AuthorizationForm";
+
 
 type ApiResult = {
   summary: {
@@ -171,7 +170,7 @@ export function PlansMatrix({
   const [isConfirming, setIsConfirming] = useState(false);
   
   // Estado para el modal de autorización
-  const [showAuthorizationForm, setShowAuthorizationForm] = useState(false);
+
   const [isRequestingAuthorization, setIsRequestingAuthorization] = useState(false);
   const [isAuthorizationSent, setIsAuthorizationSent] = useState(false);
 
@@ -302,7 +301,7 @@ export function PlansMatrix({
   const handleGeneratePDF = async () => {
     try {
       // Determinar vendedor y agencia según el tipo de usuario
-      let finalVendorName = vendorName || "—";
+      const finalVendorName = vendorName || "—";
       let finalDealerAgency = dealerAgency || "—";
 
       if (isAgency && user) {

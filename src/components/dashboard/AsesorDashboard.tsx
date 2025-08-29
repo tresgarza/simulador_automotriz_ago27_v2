@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
-import { BarChart3, Users, Calculator, FileText, TrendingUp, Download, Search, Filter } from "lucide-react";
+import { BarChart3, Users, Calculator, FileText, TrendingUp, Download, Search } from "lucide-react";
 import { SimulationService, SimulationWithQuote } from "../../../lib/simulation-service";
 import { useAuth } from "../../../lib/auth";
 import { formatMXN } from "@/lib/utils";
@@ -31,7 +31,7 @@ export function AsesorDashboard() {
     if (isAsesor && user) {
       loadDashboardData();
     }
-  }, [isAsesor, user]);
+  }, [isAsesor, user, loadDashboardData]);
 
   const loadDashboardData = async () => {
     setIsLoading(true);
@@ -119,7 +119,7 @@ export function AsesorDashboard() {
             ].map((tab) => (
               <button
                 key={tab.id}
-                onClick={() => setActiveTab(tab.id as any)}
+                onClick={() => setActiveTab(tab.id as 'overview' | 'simulations' | 'reports')}
                 className={`flex items-center py-2 px-1 border-b-2 font-medium text-sm ${
                   activeTab === tab.id
                     ? 'border-emerald-500 text-emerald-600'

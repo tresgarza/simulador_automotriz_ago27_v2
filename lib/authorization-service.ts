@@ -1,4 +1,4 @@
-import { supabaseClient, AuthorizationRequest, Simulation, Quote, User } from './supabase'
+import { supabaseClient, AuthorizationRequest } from './supabase'
 
 // Re-export types for convenience
 export type { AuthorizationRequest } from './supabase'
@@ -147,13 +147,13 @@ export class AuthorizationService {
 
       if (error) {
         console.error('Error fetching authorization request:', error)
-        return { request: null, error: error.message }
+        return { request: null, error: error instanceof Error ? error.message : 'Unknown error' }
       }
 
       return { request: data, error: null }
     } catch (error) {
       console.error('Error in getAuthorizationRequest:', error)
-      return { request: null, error: 'Error interno del servidor' }
+      return { request: null, error: error instanceof Error ? error.message : 'Error interno del servidor' }
     }
   }
 
@@ -365,7 +365,7 @@ export class AuthorizationService {
         return { request: null, error: 'Simulación no encontrada' }
       }
 
-      const { data: quote, error: quoteError } = await supabaseClient
+      const { error: quoteError } = await supabaseClient
         .from('z_auto_quotes')
         .select('*')
         .eq('id', quoteId)

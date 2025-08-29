@@ -3,7 +3,7 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { formatMXN, formatPercent, cn } from "@/lib/utils";
-import { Calculator, Car, DollarSign, Shield, Info, HelpCircle, CreditCard, User, Building2, Phone, Mail } from "lucide-react";
+import { Calculator, Car, DollarSign, Shield, Info, HelpCircle, CreditCard, User, Phone, Mail } from "lucide-react";
 import { useState, useEffect } from "react";
 import { useAuth } from "../../../lib/auth";
 
@@ -20,22 +20,6 @@ const BaseFormSchemaCore = z.object({
     .min(0, "El monto del seguro no puede ser negativo")
     .max(500000, "El monto del seguro no puede exceder $500,000"),
   commission_mode: z.enum(["cash", "financed"]),
-});
-
-// Schema con refinamientos para validaciones de negocio
-const BaseFormSchema = BaseFormSchemaCore.refine((data) => {
-  // Validar que el enganche sea al menos 30% del valor del vehículo
-  const minDownPayment = data.vehicle_value * 0.30;
-  return data.down_payment_amount >= minDownPayment;
-}, {
-  message: "El enganche debe ser al menos 30% del valor del vehículo",
-  path: ["down_payment_amount"]
-}).refine((data) => {
-  // Validar que el enganche no exceda el valor del vehículo
-  return data.down_payment_amount < data.vehicle_value;
-}, {
-  message: "El enganche no puede ser mayor o igual al valor del vehículo",
-  path: ["down_payment_amount"]
 });
 
 const ClientFormSchemaBase = BaseFormSchemaCore.extend({
@@ -223,13 +207,15 @@ export function EnhancedQuoteForm({ onSubmit, isSubmitting, hasResults = false }
     return ClientFormSchema;
   };
 
+  type FormData = z.infer<typeof ClientFormSchema> | z.infer<typeof AgencyFormSchema> | z.infer<typeof AsesorFormSchema>;
+
   const {
     register,
     handleSubmit,
     watch,
     setValue,
     formState: { errors },
-  } = useForm<any>({
+  } = useForm<FormData>({
     resolver: zodResolver(getFormSchema()),
     defaultValues: {
       vehicle_value: 405900,

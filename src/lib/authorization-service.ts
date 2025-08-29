@@ -85,7 +85,7 @@ export class AuthorizationService {
     priority?: string
     limit?: number
     offset?: number
-  }): Promise<{ requests: AuthorizationRequest[], pagination: any }> {
+  }): Promise<{ requests: AuthorizationRequest[], pagination: { total: number; limit: number; offset: number } }> {
     const params = new URLSearchParams()
     
     if (filters?.status) params.append('status', filters.status)
@@ -150,7 +150,7 @@ export class AuthorizationService {
     return this.updateAuthorizationRequest(id, {
       assigned_to_user_id: assignedToUserId,
       status: 'in_review',
-      internal_notes
+      internal_notes: internalNotes
     })
   }
 
