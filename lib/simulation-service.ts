@@ -285,20 +285,23 @@ export class SimulationService {
         'Monto Financiado'
       ]
 
-      const rows = data?.map((sim: Record<string, unknown>) => [
-        sim.id,
-        new Date(sim.calculated_at).toLocaleDateString(),
-        sim.z_auto_quotes?.client_name || '',
-        sim.z_auto_quotes?.client_email || '',
-        sim.z_auto_quotes?.client_phone || '',
-        `${sim.z_auto_quotes?.vehicle_brand || ''} ${sim.z_auto_quotes?.vehicle_model || ''}`.trim(),
-        sim.z_auto_quotes?.vehicle_value || '',
-        sim.z_auto_quotes?.down_payment_amount || '',
-        sim.tier_code,
-        sim.term_months,
-        sim.monthly_payment,
-        sim.financed_amount
-      ]) || []
+      const rows = data?.map((sim: Record<string, unknown>) => {
+        const quote = sim.z_auto_quotes as Record<string, unknown> || {}
+        return [
+          sim.id,
+          sim.calculated_at ? new Date(sim.calculated_at as string).toLocaleDateString() : '',
+          (quote.client_name as string) || '',
+          (quote.client_email as string) || '',
+          (quote.client_phone as string) || '',
+          `${(quote.vehicle_brand as string) || ''} ${(quote.vehicle_model as string) || ''}`.trim(),
+          (quote.vehicle_value as string | number) || '',
+          (quote.down_payment_amount as string | number) || '',
+          sim.tier_code,
+          sim.term_months,
+          sim.monthly_payment,
+          sim.financed_amount
+        ]
+      }) || []
 
       const csvContent = [headers, ...rows]
         .map(row => row.map(cell => `"${cell}"`).join(','))

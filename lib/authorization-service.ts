@@ -400,7 +400,7 @@ export class AuthorizationService {
         quoteId,
         undefined, // created_by_user_id - será determinado por el sistema
         undefined, // assigned_to_user_id - será asignado por el sistema
-        clientComments,
+        clientComments || undefined,
         priority
       )
 

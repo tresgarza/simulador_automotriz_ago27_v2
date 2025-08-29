@@ -5,10 +5,13 @@ import { useAuth } from "../../../lib/auth";
 import { SimulationService, SimulationWithQuote } from "../../../lib/simulation-service";
 import { formatMXN } from "@/lib/utils";
 import { AuthorizationForm } from "../../components/authorization/AuthorizationForm";
+import { AuthorizationRequest } from "../../../lib/supabase";
 
-interface AuthorizationRequest {
+// AuthorizationRequest interface - extended for page needs
+interface PageAuthorizationRequest {
   id: string;
-  simulation: SimulationWithQuote;
+  simulation_id?: string;
+  simulation?: SimulationWithQuote;
   status: 'pending' | 'approved' | 'rejected';
   createdAt: string;
   updatedAt?: string;
@@ -18,12 +21,12 @@ interface AuthorizationRequest {
 
 export default function AutorizacionesPage() {
   const { user, isAsesor } = useAuth();
-  const [requests, setRequests] = useState<AuthorizationRequest[]>([]);
-  const [filteredRequests, setFilteredRequests] = useState<AuthorizationRequest[]>([]);
+  const [requests, setRequests] = useState<PageAuthorizationRequest[]>([]);
+  const [filteredRequests, setFilteredRequests] = useState<PageAuthorizationRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
-  const [selectedRequest, setSelectedRequest] = useState<AuthorizationRequest | null>(null);
+  const [selectedRequest, setSelectedRequest] = useState<PageAuthorizationRequest | null>(null);
   const [showAuthorizationForm, setShowAuthorizationForm] = useState(false);
   const [isHydrated, setIsHydrated] = useState(false);
   const [isLoadingData, setIsLoadingData] = useState(false);
@@ -45,18 +48,19 @@ export default function AutorizacionesPage() {
       filtered = filtered.filter(request => request.status === statusFilter);
     }
 
-    // Filter by search term
+    // Filter by search term (simplified for now - can be enhanced when API includes more data)
     if (searchTerm.trim()) {
       const searchLower = searchTerm.toLowerCase();
       filtered = filtered.filter(request => {
-        const quote = request.simulation?.quote;
-        return (
-          quote?.client_name?.toLowerCase().includes(searchLower) ||
-          quote?.client_email?.toLowerCase().includes(searchLower) ||
-          quote?.client_phone?.includes(searchTerm) ||
-          quote?.vehicle_brand?.toLowerCase().includes(searchLower) ||
-          quote?.vehicle_model?.toLowerCase().includes(searchLower)
-        );
+        // Search in available fields from authorization request
+        const searchableText = [
+          request.id,
+          request.status,
+          request.reviewerName,
+          // Add more searchable fields as API provides them
+        ].filter(Boolean).join(' ').toLowerCase();
+
+        return searchableText.includes(searchLower);
       });
     }
 
@@ -73,7 +77,7 @@ export default function AutorizacionesPage() {
       // En el futuro esto debería ser una tabla específica de solicitudes de autorización
       const simulations = await SimulationService.getUserSimulations(user.id, 'asesor');
 
-      const authorizationRequests: AuthorizationRequest[] = simulations.map(simulation => ({
+      const authorizationRequests: PageAuthorizationRequest[] = simulations.map(simulation => ({
         id: simulation.id,
         simulation,
         status: 'pending' as const,
@@ -119,7 +123,7 @@ export default function AutorizacionesPage() {
     }
   }, [filterRequests, isHydrated]);
 
-  const handleAuthorizeRequest = (request: AuthorizationRequest) => {
+  const handleAuthorizeRequest = (request: PageAuthorizationRequest) => {
     setSelectedRequest(request);
     setShowAuthorizationForm(true);
   };
@@ -383,9 +387,9 @@ export default function AutorizacionesPage() {
       </div>
 
       {/* Authorization Form Modal */}
-      {showAuthorizationForm && selectedRequest && (
+      {showAuthorizationForm && selectedRequest && selectedRequest.simulation && (
         <AuthorizationForm
-          request={selectedRequest}
+          request={selectedRequest as any}
           onClose={handleCloseAuthorizationForm}
         />
       )}
