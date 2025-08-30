@@ -32,7 +32,9 @@ export async function POST(request: NextRequest) {
       ip_address,
       user_agent,
       // Datos adicionales del formulario de autorización
-      authorization_data
+      authorization_data,
+      // Datos de competidores
+      competitors
     } = body
 
     // Validaciones básicas
@@ -70,7 +72,8 @@ export async function POST(request: NextRequest) {
       risk_level,
       ip_address: ip_address || null,
       user_agent: user_agent || null,
-      authorization_data: authorization_data || null
+      authorization_data: authorization_data || null,
+      competitors_data: competitors || null
     }
 
     console.log('📝 [DEBUG] Inserting authorization request:', authRequestData)

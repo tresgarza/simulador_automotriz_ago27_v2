@@ -8,7 +8,8 @@ import {
   Calculator, TrendingUp, TrendingDown, Banknote, CreditCard, PiggyBank
 } from "lucide-react";
 import { formatMXN, cn } from "../../lib/utils";
-import { supabase, AuthorizationRequest } from "../../../lib/supabase";
+import { supabase } from "../../../lib/supabase";
+import type { AuthorizationRequest } from "../../../lib/supabase";
 
 // Schema para el formulario de autorización
 const AuthorizationSchema = z.object({
@@ -82,22 +83,15 @@ const AuthorizationSchema = z.object({
   vehicle_year: z.coerce.number().min(2000, "El año debe ser mayor a 2000"),
   sale_value: z.coerce.number().min(0, "El valor de venta no puede ser negativo"),
   book_value: z.coerce.number().min(0, "El valor de libro azul no puede ser negativo"),
-  competitor_1: z.coerce.number().min(0, "El precio del competidor 1 no puede ser negativo"),
-  competitor_2: z.coerce.number().min(0, "El precio del competidor 2 no puede ser negativo"),
-  competitor_3: z.coerce.number().min(0, "El precio del competidor 3 no puede ser negativo")
+  
+  // Competidores flexibles
+  competitors: z.array(z.object({
+    name: z.string().min(1, "El nombre del competidor es requerido"),
+    price: z.coerce.number().min(0, "El precio no puede ser negativo")
+  })).optional()
 });
 
 type AuthorizationFormData = z.infer<typeof AuthorizationSchema>;
-
-interface AuthorizationRequest {
-  id: string;
-  simulation: any;
-  status: 'pending' | 'approved' | 'rejected';
-  createdAt: string;
-  updatedAt?: string;
-  reviewerId?: string;
-  reviewerName?: string;
-}
 
 interface AuthorizationFormProps {
   request: AuthorizationRequest;
@@ -201,15 +195,23 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
       commitments: 0,
       personal_expenses: 0,
       business_expenses: 0,
-      competitor_1: 0,
-      competitor_2: 0,
-      competitor_3: 0
+      // Competidores flexibles - iniciar con 3 competidores por defecto
+      competitors: [
+        { name: "", price: 0 },
+        { name: "", price: 0 },
+        { name: "", price: 0 }
+      ]
     }
   });
 
   const { fields: incomeFields, append: appendIncome, remove: removeIncome } = useFieldArray({
     control,
     name: "incomes"
+  });
+
+  const { fields: competitorFields, append: appendCompetitor, remove: removeCompetitor } = useFieldArray({
+    control,
+    name: "competitors"
   });
 
   const watchedMonthlyCapacity = watch("monthly_capacity");
@@ -284,6 +286,8 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
         promoter_code: request.simulation?.quote?.promoter_code,
         client_comments: data.comments,
         risk_level: 'medium',
+        // Datos de competidores flexibles
+        competitors: data.competitors || [],
         // Guardar todos los datos del formulario como JSONB
         authorization_data: {
           // Datos del solicitante
@@ -315,9 +319,9 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
           vehicle_year: data.vehicle_year,
           sale_value: data.sale_value,
           book_value: data.book_value,
-          competitor_1: data.competitor_1,
-          competitor_2: data.competitor_2,
-          competitor_3: data.competitor_3,
+          
+          // Competidores flexibles
+          competitors: data.competitors || [],
           
           // Cálculos automáticos
           total_income: mes1Income + mes2Income + mes3Income,
@@ -1047,45 +1051,67 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
                   </div>
                 </div>
 
-                {/* Competidores */}
+                {/* Precios de Competidores */}
                 <div className="bg-gray-50 border border-gray-200 rounded-xl p-6">
-                  <h4 className="text-lg font-semibold text-gray-900 mb-4">Precios de Competidores</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Competidor 1
-                      </label>
-                      <input
-                        type="number"
-                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-gray-500 focus:border-gray-500"
-                        placeholder="489000"
-                        {...register("competitor_1")}
-                      />
-                    </div>
+                  <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+                    <TrendingDown className="w-5 h-5 mr-2 text-blue-600" />
+                    Precios de Competidores
+                  </h4>
+                  <p className="text-sm text-gray-600 mb-6">
+                    Ingresa los precios de vehículos similares en diferentes plataformas para comparación
+                  </p>
+                  
+                  <div className="space-y-4">
+                    {competitorFields.map((field, index) => (
+                      <div key={field.id} className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-white rounded-lg border">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Nombre del Competidor *
+                          </label>
+                          <input
+                            type="text"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            placeholder="Ej: MercadoLibre, Autocosmos, Seminuevos..."
+                            {...register(`competitors.${index}.name`)}
+                          />
+                        </div>
 
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Competidor 2
-                      </label>
-                      <input
-                        type="number"
-                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-gray-500 focus:border-gray-500"
-                        placeholder="455000"
-                        {...register("competitor_2")}
-                      />
-                    </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Precio *
+                          </label>
+                          <input
+                            type="number"
+                            className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                            placeholder="Ej: 489,000"
+                            {...register(`competitors.${index}.price`)}
+                          />
+                        </div>
 
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Competidor 3
-                      </label>
-                      <input
-                        type="number"
-                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-gray-500 focus:border-gray-500"
-                        placeholder="500000"
-                        {...register("competitor_3")}
-                      />
-                    </div>
+                        <div className="flex items-end space-x-2">
+                          {competitorFields.length > 3 && (
+                            <button
+                              type="button"
+                              onClick={() => removeCompetitor(index)}
+                              className="px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+                              title="Eliminar competidor"
+                            >
+                              <Minus className="w-4 h-4" />
+                            </button>
+                          )}
+                          {index === competitorFields.length - 1 && (
+                            <button
+                              type="button"
+                              onClick={() => appendCompetitor({ name: "", price: 0 })}
+                              className="px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+                              title="Agregar competidor"
+                            >
+                              <Plus className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </div>
