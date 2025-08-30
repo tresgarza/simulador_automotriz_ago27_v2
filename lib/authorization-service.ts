@@ -61,13 +61,7 @@ export class AuthorizationService {
 
       let query = supabaseClient
         .from('z_auto_authorization_requests')
-        .select(`
-          *,
-          simulation:z_auto_simulations(*),
-          quote:z_auto_quotes(*),
-          created_by_user:z_auto_users!z_auto_authorization_requests_created_by_user_id_fkey(id, name, email),
-          assigned_to_user:z_auto_users!z_auto_authorization_requests_assigned_to_user_id_fkey(id, name, email)
-        `)
+        .select('*') // Simplificar query - solo datos principales
         .order('created_at', { ascending: false })
         .limit(limit)
         .range(offset, offset + limit - 1)
@@ -119,8 +113,23 @@ export class AuthorizationService {
           id: data[0].id,
           client_name: data[0].client_name,
           status: data[0].status,
+          monthly_payment: data[0].monthly_payment,
+          monthly_payment_type: typeof data[0].monthly_payment,
+          vehicle_value: data[0].vehicle_value,
           created_at: data[0].created_at
         });
+        
+        // Logging específico para Abiel Cantu
+        const abielRequest = data.find(req => req.client_name?.toLowerCase().includes('abiel'));
+        if (abielRequest) {
+          console.log('🎯 ABIEL CANTU REQUEST:', {
+            id: abielRequest.id,
+            monthly_payment: abielRequest.monthly_payment,
+            monthly_payment_type: typeof abielRequest.monthly_payment,
+            vehicle_value: abielRequest.vehicle_value,
+            requested_amount: abielRequest.requested_amount
+          });
+        }
       }
 
       return { requests: data || [], error: null }

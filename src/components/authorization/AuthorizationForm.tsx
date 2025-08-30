@@ -8,7 +8,7 @@ import {
   Calculator, TrendingUp, TrendingDown, Banknote, CreditCard, PiggyBank
 } from "lucide-react";
 import { formatMXN, cn } from "../../lib/utils";
-import { supabase } from "../../lib/supabase";
+import { supabase, AuthorizationRequest } from "../../../lib/supabase";
 
 // Schema para el formulario de autorización
 const AuthorizationSchema = z.object({
@@ -28,17 +28,52 @@ const AuthorizationSchema = z.object({
   monthly_discount: z.coerce.number().min(0, "El descuento mensual no puede ser negativo"),
   comments: z.string().optional(),
 
-  // Ingresos Mensuales Comprobables
-  incomes: z.array(z.object({
-    type: z.enum(["nomina", "comisiones", "negocio"]),
-    period: z.string().optional(),
-    amount: z.coerce.number().min(0, "El monto no puede ser negativo")
-  })).min(1, "Debe agregar al menos un ingreso"),
+  // Ingresos por mes (estructura simple)
+  mes1_nomina: z.coerce.number().min(0).optional(),
+  mes1_comisiones: z.coerce.number().min(0).optional(),
+  mes1_negocio: z.coerce.number().min(0).optional(),
+  mes1_efectivo: z.coerce.number().min(0).optional(),
+  
+  mes2_nomina: z.coerce.number().min(0).optional(),
+  mes2_comisiones: z.coerce.number().min(0).optional(),
+  mes2_negocio: z.coerce.number().min(0).optional(),
+  mes2_efectivo: z.coerce.number().min(0).optional(),
+  
+  mes3_nomina: z.coerce.number().min(0).optional(),
+  mes3_comisiones: z.coerce.number().min(0).optional(),
+  mes3_negocio: z.coerce.number().min(0).optional(),
+  mes3_efectivo: z.coerce.number().min(0).optional(),
 
-  // Compromisos y Gastos
-  commitments: z.coerce.number().min(0, "Los compromisos no pueden ser negativos"),
-  personal_expenses: z.coerce.number().min(0, "Los gastos personales no pueden ser negativos"),
-  business_expenses: z.coerce.number().min(0, "Los gastos de negocio no pueden ser negativos"),
+  // Gastos por mes (estructura simple)
+  mes1_compromisos: z.coerce.number().min(0).optional(),
+  mes1_gastos_personales: z.coerce.number().min(0).optional(),
+  mes1_gastos_negocio: z.coerce.number().min(0).optional(),
+  
+  mes2_compromisos: z.coerce.number().min(0).optional(),
+  mes2_gastos_personales: z.coerce.number().min(0).optional(),
+  mes2_gastos_negocio: z.coerce.number().min(0).optional(),
+  
+  mes3_compromisos: z.coerce.number().min(0).optional(),
+  mes3_gastos_personales: z.coerce.number().min(0).optional(),
+  mes3_gastos_negocio: z.coerce.number().min(0).optional(),
+
+  // Campos legacy para compatibilidad
+  incomes: z.array(z.object({
+    type: z.enum(["nomina", "comisiones", "negocio", "efectivo"]),
+    period: z.string().optional(),
+    amount: z.coerce.number().min(0, "El monto no puede ser negativo").optional()
+  })).optional(),
+
+  expenses: z.array(z.object({
+    type: z.enum(["compromisos", "personal", "negocio"]),
+    period: z.string().optional(),
+    amount: z.coerce.number().min(0, "El monto no puede ser negativo").optional()
+  })).optional(),
+
+  // Campos legacy para compatibilidad
+  commitments: z.coerce.number().min(0, "Los compromisos no pueden ser negativos").optional(),
+  personal_expenses: z.coerce.number().min(0, "Los gastos personales no pueden ser negativos").optional(),
+  business_expenses: z.coerce.number().min(0, "Los gastos de negocio no pueden ser negativos").optional(),
 
   // Datos del Carro
   dealership: z.string().min(1, "La agencia es requerida"),
@@ -87,6 +122,32 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
   const [step, setStep] = useState(1);
   const totalSteps = 3;
 
+  // Helper function para convertir valores de Supabase a numbers
+  const getNumericValue = (value: any): number => {
+    if (typeof value === 'number') return value;
+    if (typeof value === 'string') return parseFloat(value) || 0;
+    return 0;
+  };
+
+  // Extraer valores numéricos correctos
+  const monthlyPaymentValue = getNumericValue(request.monthly_payment);
+  const vehicleValueValue = getNumericValue(request.vehicle_value);
+  const requestedAmountValue = getNumericValue(request.requested_amount);
+
+  // Debug: Log de los datos recibidos
+  console.log('🔍 AuthorizationForm received data:', {
+    request_id: request.id,
+    full_request: request, // LOG COMPLETO DEL REQUEST
+    monthly_payment_raw: request.monthly_payment,
+    monthly_payment_converted: monthlyPaymentValue,
+    vehicle_value_raw: request.vehicle_value,
+    vehicle_value_converted: vehicleValueValue,
+    simulation_exists: !!request.simulation,
+    simulation_pmt_total_month2: request.simulation?.pmt_total_month2
+  });
+
+  // Alert removido - debugging completado
+
   const {
     register,
     handleSubmit,
@@ -97,17 +158,46 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
   } = useForm({
     resolver: zodResolver(AuthorizationSchema),
     defaultValues: {
-      // Pre-llenar con datos de la simulación
-      applicant_name: request.simulation?.quote?.client_name || "",
-      requested_amount: request.simulation?.quote?.vehicle_value || 0,
-      term_months: request.simulation?.term_months || 48,
-      interest_rate: (request.simulation?.annual_rate || 0.45) * 100,
-      opening_fee: 3, // 3% por defecto
-      vehicle_brand: request.simulation?.quote?.vehicle_brand || "",
-      vehicle_model: request.simulation?.quote?.vehicle_model || "",
-      vehicle_year: request.simulation?.quote?.vehicle_year || new Date().getFullYear(),
-      sale_value: request.simulation?.quote?.vehicle_value || 0,
-      incomes: [{ type: "nomina", period: "", amount: 0 }],
+      // Paso 1: Datos automáticos de Supabase
+      applicant_name: request.simulation?.quote?.client_name || request.client_name || "",
+      requested_amount: requestedAmountValue || vehicleValueValue || 0,
+      term_months: request.simulation?.term_months || request.term_months || 48,
+      interest_rate: request.simulation?.tier_code === 'A' ? 36 : request.simulation?.tier_code === 'B' ? 42 : 45,
+      opening_fee: 3.0928, // Comisión real del sistema (3% / 0.97)
+      monthly_capacity: monthlyPaymentValue, // Capacidad de pago = Pago mensual de la solicitud (convertido)
+      monthly_discount: monthlyPaymentValue, // Descuento mensual = Pago mensual de la solicitud (convertido)
+      
+      // Paso 3: Datos del vehículo de Supabase
+      dealership: request.agency_name || "Agencia no especificada",
+      vehicle_brand: request.simulation?.quote?.vehicle_brand || request.vehicle_brand || "",
+      vehicle_model: request.simulation?.quote?.vehicle_model || request.vehicle_model || "",
+      vehicle_year: request.simulation?.quote?.vehicle_year || request.vehicle_year || new Date().getFullYear(),
+      sale_value: vehicleValueValue || 0,
+      book_value: vehicleValueValue || 0, // Usar mismo valor como base
+      // Valores por defecto para ingresos (estructura simple)
+      mes1_nomina: undefined,
+      mes1_comisiones: undefined,
+      mes1_negocio: undefined,
+      mes1_efectivo: undefined,
+      mes2_nomina: undefined,
+      mes2_comisiones: undefined,
+      mes2_negocio: undefined,
+      mes2_efectivo: undefined,
+      mes3_nomina: undefined,
+      mes3_comisiones: undefined,
+      mes3_negocio: undefined,
+      mes3_efectivo: undefined,
+
+      // Valores por defecto para gastos (estructura simple)
+      mes1_compromisos: undefined,
+      mes1_gastos_personales: undefined,
+      mes1_gastos_negocio: undefined,
+      mes2_compromisos: undefined,
+      mes2_gastos_personales: undefined,
+      mes2_gastos_negocio: undefined,
+      mes3_compromisos: undefined,
+      mes3_gastos_personales: undefined,
+      mes3_gastos_negocio: undefined,
       commitments: 0,
       personal_expenses: 0,
       business_expenses: 0,
@@ -122,18 +212,54 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
     name: "incomes"
   });
 
-  const watchedIncomes = watch("incomes");
-  const watchedCommitments = watch("commitments");
-  const watchedPersonalExpenses = watch("personal_expenses");
-  const watchedBusinessExpenses = watch("business_expenses");
-  const watchedMonthlySalary = watch("monthly_salary");
   const watchedMonthlyCapacity = watch("monthly_capacity");
+  const monthlyPayment = monthlyPaymentValue; // Usar el valor convertido
 
-  // Calcular total de ingresos
-  const totalIncome = watchedIncomes?.reduce((sum, income) => sum + (income.amount || 0), 0) || 0;
-  const totalExpenses = (watchedCommitments || 0) + (watchedPersonalExpenses || 0) + (watchedBusinessExpenses || 0);
-  const availableIncome = totalIncome - totalExpenses;
-  const capacityPercentage = availableIncome > 0 ? (watchedMonthlyCapacity / availableIncome) * 100 : 0;
+  // Calcular ingresos por mes usando estructura simple (convertir explícitamente a números)
+  const mes1Income = Number(watch("mes1_nomina") || 0) + Number(watch("mes1_comisiones") || 0) + Number(watch("mes1_negocio") || 0) + Number(watch("mes1_efectivo") || 0);
+  const mes2Income = Number(watch("mes2_nomina") || 0) + Number(watch("mes2_comisiones") || 0) + Number(watch("mes2_negocio") || 0) + Number(watch("mes2_efectivo") || 0);
+  const mes3Income = Number(watch("mes3_nomina") || 0) + Number(watch("mes3_comisiones") || 0) + Number(watch("mes3_negocio") || 0) + Number(watch("mes3_efectivo") || 0);
+  const averageIncome = (mes1Income + mes2Income + mes3Income) / 3;
+
+  // Calcular gastos por mes usando estructura simple (convertir explícitamente a números)
+  const mes1Expenses = Number(watch("mes1_compromisos") || 0) + Number(watch("mes1_gastos_personales") || 0) + Number(watch("mes1_gastos_negocio") || 0);
+  const mes2Expenses = Number(watch("mes2_compromisos") || 0) + Number(watch("mes2_gastos_personales") || 0) + Number(watch("mes2_gastos_negocio") || 0);
+  const mes3Expenses = Number(watch("mes3_compromisos") || 0) + Number(watch("mes3_gastos_personales") || 0) + Number(watch("mes3_gastos_negocio") || 0);
+  const averageExpenses = (mes1Expenses + mes2Expenses + mes3Expenses) / 3;
+
+  // Calcular disponible
+  const availableIncome = averageIncome - averageExpenses;
+
+  // Calcular capacidad de pago (40% de ingresos disponibles)
+  const paymentCapacity = availableIncome * 0.4;
+
+  // Cálculo de proporción (Capacidad 40% ÷ Mensualidad)
+  const viabilityRatio = monthlyPayment > 0 ? paymentCapacity / monthlyPayment : 0;
+  
+  const getViabilityStatus = (ratio: number) => {
+    if (ratio < 1) return { label: "No Viable", color: "text-red-600", bg: "bg-red-100" };
+    if (ratio >= 1 && ratio < 1.2) return { label: "Riesgoso", color: "text-orange-600", bg: "bg-orange-100" };
+    if (ratio >= 1.2 && ratio < 1.4) return { label: "Aceptable", color: "text-yellow-600", bg: "bg-yellow-100" };
+    if (ratio >= 1.4 && ratio < 1.8) return { label: "Óptimo", color: "text-green-600", bg: "bg-green-100" };
+    return { label: "Excelente", color: "text-emerald-600", bg: "bg-emerald-100" };
+  };
+
+  const viabilityStatus = getViabilityStatus(viabilityRatio);
+
+  // Generar los últimos 3 meses (sin contar el anterior)
+  const generateLastThreeMonths = () => {
+    const months = [];
+    const currentDate = new Date();
+    for (let i = -4; i <= -2; i++) { // -4, -3, -2 para obtener 3 meses atrás sin contar el anterior
+      const date = new Date(currentDate.getFullYear(), currentDate.getMonth() + i, 1);
+      const monthName = date.toLocaleDateString('es-ES', { month: 'short' }).toUpperCase();
+      const year = date.getFullYear().toString().slice(-2);
+      months.push(`${monthName} ${year}`);
+    }
+    return months;
+  };
+
+  const lastThreeMonths = generateLastThreeMonths();
 
   const onSubmit = async (data: AuthorizationFormData) => {
     setIsSubmitting(true);
@@ -194,10 +320,13 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
           competitor_3: data.competitor_3,
           
           // Cálculos automáticos
-          total_income: totalIncome,
-          total_expenses: totalExpenses,
+          total_income: mes1Income + mes2Income + mes3Income,
+          average_income: averageIncome,
+          total_expenses: mes1Expenses + mes2Expenses + mes3Expenses,
+          average_expenses: averageExpenses,
           available_income: availableIncome,
-          capacity_percentage: capacityPercentage
+          payment_capacity: paymentCapacity,
+          viability_ratio: viabilityRatio
         }
       };
 
@@ -319,8 +448,8 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
                     </label>
                     <input
                       type="text"
-                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                      placeholder="Oscar Alberto Saucedo Jimenez"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-green-50"
+                      placeholder="Cargado automáticamente de Supabase"
                       {...register("applicant_name")}
                     />
                     {errors.applicant_name && (
@@ -412,8 +541,8 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
                     </label>
                     <input
                       type="number"
-                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                      placeholder="345000"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-green-50"
+                      placeholder="Monto automático de Supabase"
                       {...register("requested_amount")}
                     />
                     {errors.requested_amount && (
@@ -427,8 +556,8 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
                     </label>
                     <input
                       type="number"
-                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                      placeholder="48"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-green-50"
+                      placeholder="Plazo de Supabase"
                       {...register("term_months")}
                     />
                     {errors.term_months && (
@@ -443,8 +572,8 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
                     <input
                       type="number"
                       step="0.01"
-                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                      placeholder="45.00"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-green-50"
+                      placeholder="Tasa automática según tier"
                       {...register("interest_rate")}
                     />
                     {errors.interest_rate && (
@@ -459,8 +588,8 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
                     <input
                       type="number"
                       step="0.01"
-                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                      placeholder="3.00"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-green-50"
+                      placeholder="Comisión del sistema"
                       {...register("opening_fee")}
                     />
                     {errors.opening_fee && (
@@ -470,31 +599,27 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
                 </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Capacidad de Pago Mensual *
-                    </label>
-                    <input
-                      type="number"
-                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                      placeholder="24250.88"
-                      {...register("monthly_capacity")}
-                    />
-                    {errors.monthly_capacity && (
-                      <p className="text-red-600 text-sm mt-1">{errors.monthly_capacity.message}</p>
-                    )}
-                  </div>
+
 
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Descuento Mensual *
+                      Pago Mensual Total *
+                      <span className="text-xs text-emerald-600 block">
+                        (Calculado automáticamente desde el simulador)
+                      </span>
                     </label>
                     <input
                       type="number"
-                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                      placeholder="15597.93"
+                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-emerald-50"
+                      placeholder="Pago mensual del simulador"
                       {...register("monthly_discount")}
+                      value={monthlyPaymentValue}
+                      readOnly
+                      onFocus={() => console.log('📝 Input focused, current value:', monthlyPaymentValue)}
                     />
+                    <p className="text-xs text-emerald-600 mt-1">
+                      Este valor viene directamente del simulador e incluye: capital + interés + IVA + GPS + seguros
+                    </p>
                     {errors.monthly_discount && (
                       <p className="text-red-600 text-sm mt-1">{errors.monthly_discount.message}</p>
                     )}
@@ -530,124 +655,197 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
                     Ingresos Mensuales Comprobables
                   </h4>
 
-                  {incomeFields.map((field, index) => (
-                    <div key={field.id} className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-4 p-4 bg-white rounded-lg border">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Tipo *
-                        </label>
-                        <select
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                          {...register(`incomes.${index}.type`)}
-                        >
-                          {Object.entries(incomeTypes).map(([value, label]) => (
-                            <option key={value} value={value}>{label}</option>
-                          ))}
-                        </select>
-                      </div>
+                  <div className="bg-white rounded-lg border overflow-hidden">
+                    <table className="w-full">
+                      <thead className="bg-blue-100">
+                        <tr>
+                          <th className="text-left py-3 px-4 font-semibold text-blue-800">Mes</th>
+                          <th className="text-right py-3 px-4 font-semibold text-green-700">Nómina</th>
+                          <th className="text-right py-3 px-4 font-semibold text-blue-700">Comisiones</th>
+                          <th className="text-right py-3 px-4 font-semibold text-purple-700">Negocio</th>
+                          <th className="text-right py-3 px-4 font-semibold text-orange-700">Efectivo</th>
+                          <th className="text-right py-3 px-4 font-semibold text-gray-900">Total</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {lastThreeMonths.map((month, index) => {
+                          // Usar campos directos para cada mes
+                          const mesNum = index + 1;
+                          const nominaField = `mes${mesNum}_nomina` as const;
+                          const comisionesField = `mes${mesNum}_comisiones` as const;
+                          const negocioField = `mes${mesNum}_negocio` as const;
+                          const efectivoField = `mes${mesNum}_efectivo` as const;
+                          
+                          const nominaValue = Number(watch(nominaField) || 0);
+                          const comisionesValue = Number(watch(comisionesField) || 0);
+                          const negocioValue = Number(watch(negocioField) || 0);
+                          const efectivoValue = Number(watch(efectivoField) || 0);
+                          const total = nominaValue + comisionesValue + negocioValue + efectivoValue;
 
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Período
-                        </label>
-                        <input
-                          type="text"
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                          placeholder="5/25"
-                          {...register(`incomes.${index}.period`)}
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-2">
-                          Monto *
-                        </label>
-                        <input
-                          type="number"
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                          placeholder="59996.11"
-                          {...register(`incomes.${index}.amount`)}
-                        />
-                      </div>
-
-                      <div className="flex items-end space-x-2">
-                        {incomeFields.length > 1 && (
-                          <button
-                            type="button"
-                            onClick={() => removeIncome(index)}
-                            className="px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
-                          >
-                            <Minus className="w-4 h-4" />
-                          </button>
-                        )}
-                        {index === incomeFields.length - 1 && (
-                          <button
-                            type="button"
-                            onClick={() => appendIncome({ type: "nomina", period: "", amount: 0 })}
-                            className="px-3 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-                          >
-                            <Plus className="w-4 h-4" />
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  ))}
+                          return (
+                            <tr key={month} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                              <td className="py-3 px-4 font-medium text-gray-900">{month}</td>
+                              <td className="py-3 px-4">
+                                <input
+                                  type="number"
+                                  placeholder=""
+                                  className="w-full text-right px-2 py-1 border border-gray-300 rounded focus:ring-1 focus:ring-green-500 focus:border-green-500"
+                                  {...register(nominaField)}
+                                />
+                              </td>
+                              <td className="py-3 px-4">
+                                <input
+                                  type="number"
+                                  placeholder=""
+                                  className="w-full text-right px-2 py-1 border border-gray-300 rounded focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                                  {...register(comisionesField)}
+                                />
+                              </td>
+                              <td className="py-3 px-4">
+                                <input
+                                  type="number"
+                                  placeholder=""
+                                  className="w-full text-right px-2 py-1 border border-gray-300 rounded focus:ring-1 focus:ring-purple-500 focus:border-purple-500"
+                                  {...register(negocioField)}
+                                />
+                              </td>
+                              <td className="py-3 px-4">
+                                <input
+                                  type="number"
+                                  placeholder=""
+                                  className="w-full text-right px-2 py-1 border border-gray-300 rounded focus:ring-1 focus:ring-orange-500 focus:border-orange-500"
+                                  {...register(efectivoField)}
+                                />
+                              </td>
+                              <td className="py-3 px-4 text-right font-bold text-gray-900">
+                                {formatMXN(total)}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                      <tfoot className="bg-blue-100 border-t-2">
+                        <tr>
+                          <td className="py-3 px-4 font-bold text-blue-800">PROMEDIO</td>
+                          <td className="py-3 px-4 text-right font-bold text-green-700">
+                            {formatMXN((Number(watch('mes1_nomina') || 0) + Number(watch('mes2_nomina') || 0) + Number(watch('mes3_nomina') || 0)) / 3)}
+                          </td>
+                          <td className="py-3 px-4 text-right font-bold text-blue-700">
+                            {formatMXN((Number(watch('mes1_comisiones') || 0) + Number(watch('mes2_comisiones') || 0) + Number(watch('mes3_comisiones') || 0)) / 3)}
+                          </td>
+                          <td className="py-3 px-4 text-right font-bold text-purple-700">
+                            {formatMXN((Number(watch('mes1_negocio') || 0) + Number(watch('mes2_negocio') || 0) + Number(watch('mes3_negocio') || 0)) / 3)}
+                          </td>
+                          <td className="py-3 px-4 text-right font-bold text-orange-700">
+                            {formatMXN((Number(watch('mes1_efectivo') || 0) + Number(watch('mes2_efectivo') || 0) + Number(watch('mes3_efectivo') || 0)) / 3)}
+                          </td>
+                          <td className="py-3 px-4 text-right font-bold text-blue-800 text-lg">
+                            {formatMXN(averageIncome)}
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-6 p-4 bg-blue-100 rounded-lg">
                     <div className="text-center">
-                      <p className="text-sm text-blue-700 font-medium">Total Ingresos</p>
-                      <p className="text-xl font-bold text-blue-800">{formatMXN(totalIncome)}</p>
+                      <p className="text-sm text-blue-700 font-medium">Total Ingresos (3 meses)</p>
+                      <p className="text-xl font-bold text-blue-800">{formatMXN(mes1Income + mes2Income + mes3Income)}</p>
                     </div>
                     <div className="text-center">
                       <p className="text-sm text-blue-700 font-medium">Meses</p>
-                      <p className="text-xl font-bold text-blue-800">{watchedIncomes?.length || 0}</p>
+                      <p className="text-xl font-bold text-blue-800">3</p>
                     </div>
                     <div className="text-center">
                       <p className="text-sm text-blue-700 font-medium">Promedio</p>
-                      <p className="text-xl font-bold text-blue-800">{formatMXN(totalIncome / Math.max(watchedIncomes?.length || 1, 1))}</p>
+                      <p className="text-xl font-bold text-blue-800">{formatMXN(averageIncome)}</p>
                     </div>
                   </div>
                 </div>
 
-                {/* Compromisos y Gastos */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center">
-                      <CreditCard className="w-4 h-4 mr-2 text-red-600" />
-                      Compromisos en Buro
-                    </label>
-                    <input
-                      type="number"
-                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-red-500 focus:border-red-500"
-                      placeholder="0"
-                      {...register("commitments")}
-                    />
-                  </div>
+                {/* Gastos Mensuales Comprobables */}
+                <div className="bg-red-50 border border-red-200 rounded-xl p-6">
+                  <h4 className="text-lg font-semibold text-red-800 mb-4 flex items-center">
+                    <TrendingDown className="w-5 h-5 mr-2" />
+                    Gastos Mensuales Comprobables
+                  </h4>
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center">
-                      <PiggyBank className="w-4 h-4 mr-2 text-orange-600" />
-                      Gasto Personal
-                    </label>
-                    <input
-                      type="number"
-                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
-                      placeholder="0"
-                      {...register("personal_expenses")}
-                    />
-                  </div>
+                  <div className="bg-white rounded-lg border overflow-hidden">
+                    <table className="w-full">
+                      <thead className="bg-red-100">
+                        <tr>
+                          <th className="text-left py-3 px-4 font-semibold text-red-800">Mes</th>
+                          <th className="text-right py-3 px-4 font-semibold text-red-700">Compromisos Buró</th>
+                          <th className="text-right py-3 px-4 font-semibold text-orange-700">Gastos Personales</th>
+                          <th className="text-right py-3 px-4 font-semibold text-purple-700">Gastos Negocio</th>
+                          <th className="text-right py-3 px-4 font-semibold text-gray-900">Total</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {lastThreeMonths.map((month, index) => {
+                          // Usar campos directos para cada mes
+                          const mesNum = index + 1;
+                          const compromisosField = `mes${mesNum}_compromisos` as const;
+                          const personalField = `mes${mesNum}_gastos_personales` as const;
+                          const negocioField = `mes${mesNum}_gastos_negocio` as const;
+                          
+                          const compromisosValue = Number(watch(compromisosField) || 0);
+                          const personalValue = Number(watch(personalField) || 0);
+                          const negocioValue = Number(watch(negocioField) || 0);
+                          const total = compromisosValue + personalValue + negocioValue;
 
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2 flex items-center">
-                      <Building2 className="w-4 h-4 mr-2 text-purple-600" />
-                      Gasto Negocio
-                    </label>
-                    <input
-                      type="number"
-                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                      placeholder="0"
-                      {...register("business_expenses")}
-                    />
+                          return (
+                            <tr key={month} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                              <td className="py-3 px-4 font-medium text-gray-900">{month}</td>
+                              <td className="py-3 px-4">
+                                <input
+                                  type="number"
+                                  placeholder=""
+                                  className="w-full text-right px-2 py-1 border border-gray-300 rounded focus:ring-1 focus:ring-red-500 focus:border-red-500"
+                                  {...register(compromisosField)}
+                                />
+                              </td>
+                              <td className="py-3 px-4">
+                                <input
+                                  type="number"
+                                  placeholder=""
+                                  className="w-full text-right px-2 py-1 border border-gray-300 rounded focus:ring-1 focus:ring-orange-500 focus:border-orange-500"
+                                  {...register(personalField)}
+                                />
+                              </td>
+                              <td className="py-3 px-4">
+                                <input
+                                  type="number"
+                                  placeholder=""
+                                  className="w-full text-right px-2 py-1 border border-gray-300 rounded focus:ring-1 focus:ring-purple-500 focus:border-purple-500"
+                                  {...register(negocioField)}
+                                />
+                              </td>
+                              <td className="py-3 px-4 text-right font-bold text-gray-900">
+                                {formatMXN(total)}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                      <tfoot className="bg-red-100 border-t-2">
+                        <tr>
+                          <td className="py-3 px-4 font-bold text-red-800">PROMEDIO</td>
+                          <td className="py-3 px-4 text-right font-bold text-red-700">
+                            {formatMXN((Number(watch('mes1_compromisos') || 0) + Number(watch('mes2_compromisos') || 0) + Number(watch('mes3_compromisos') || 0)) / 3)}
+                          </td>
+                          <td className="py-3 px-4 text-right font-bold text-orange-700">
+                            {formatMXN((Number(watch('mes1_gastos_personales') || 0) + Number(watch('mes2_gastos_personales') || 0) + Number(watch('mes3_gastos_personales') || 0)) / 3)}
+                          </td>
+                          <td className="py-3 px-4 text-right font-bold text-purple-700">
+                            {formatMXN((Number(watch('mes1_gastos_negocio') || 0) + Number(watch('mes2_gastos_negocio') || 0) + Number(watch('mes3_gastos_negocio') || 0)) / 3)}
+                          </td>
+                          <td className="py-3 px-4 text-right font-bold text-red-800 text-lg">
+                            {formatMXN(averageExpenses)}
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table>
                   </div>
                 </div>
 
@@ -657,12 +855,12 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div className="space-y-3">
                       <div className="flex justify-between">
-                        <span className="text-gray-700">Total Ingresos:</span>
-                        <span className="font-semibold text-green-600">{formatMXN(totalIncome)}</span>
+                        <span className="text-gray-700">Total Ingresos (Promedio):</span>
+                        <span className="font-semibold text-green-600">{formatMXN(averageIncome)}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-gray-700">Total Egresos:</span>
-                        <span className="font-semibold text-red-600">{formatMXN(totalExpenses)}</span>
+                        <span className="text-gray-700">Total Egresos (Promedio):</span>
+                        <span className="font-semibold text-red-600">{formatMXN(averageExpenses)}</span>
                       </div>
                       <div className="flex justify-between border-t pt-2">
                         <span className="text-gray-700 font-medium">Disponible:</span>
@@ -671,25 +869,81 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
                     </div>
                     <div className="space-y-3">
                       <div className="flex justify-between">
-                        <span className="text-gray-700">Capacidad de Pago:</span>
-                        <span className="font-semibold">{formatMXN(watchedMonthlyCapacity || 0)}</span>
+                        <span className="text-gray-700">Capacidad de Pago (40%):</span>
+                        <span className="font-semibold text-green-600">{formatMXN(paymentCapacity)}</span>
                       </div>
                       <div className="flex justify-between">
-                        <span className="text-gray-700">Capacidad 40%:</span>
-                        <span className="font-semibold">{formatMXN(availableIncome * 0.4)}</span>
+                        <span className="text-gray-700">Pago Mensual Total:</span>
+                        <span className="font-semibold text-blue-600">{formatMXN(monthlyPayment)}</span>
                       </div>
                       <div className="flex justify-between border-t pt-2">
-                        <span className="text-gray-700 font-medium">Porcentaje:</span>
+                        <span className="text-gray-700 font-medium">Proporción:</span>
                         <span className={cn(
-                          "font-bold",
-                          capacityPercentage > 40 ? "text-red-600" : "text-green-600"
+                          "font-bold text-lg",
+                          viabilityRatio < 1 ? "text-red-600" : 
+                          viabilityRatio < 1.2 ? "text-orange-600" :
+                          viabilityRatio < 1.4 ? "text-yellow-600" :
+                          viabilityRatio < 1.8 ? "text-green-600" : "text-emerald-600"
                         )}>
-                          {capacityPercentage.toFixed(1)}%
+                          {viabilityRatio.toFixed(2)}
                         </span>
                       </div>
                     </div>
                   </div>
                 </div>
+
+                {/* Métrica de Viabilidad */}
+                <div className="bg-white border border-gray-200 rounded-xl p-6">
+                  <h4 className="text-lg font-semibold text-gray-900 mb-4">Análisis de Viabilidad</h4>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="text-center">
+                      <div className="text-sm text-gray-600 mb-2">Ratio de Viabilidad</div>
+                      <div className="text-3xl font-bold text-gray-900">{viabilityRatio.toFixed(2)}</div>
+                      <div className="text-xs text-gray-500">Disponible / Capacidad</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-sm text-gray-600 mb-2">Estado</div>
+                      <div className={`inline-flex px-4 py-2 rounded-full text-sm font-semibold ${viabilityStatus.bg} ${viabilityStatus.color}`}>
+                        {viabilityStatus.label}
+                      </div>
+                    </div>
+                    <div className="text-center">
+                      <div className="text-sm text-gray-600 mb-2">Excedente</div>
+                      <div className={`text-2xl font-bold ${availableIncome - (watchedMonthlyCapacity || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        {formatMXN(availableIncome - (watchedMonthlyCapacity || 0))}
+                      </div>
+                    </div>
+                  </div>
+                  
+                  {/* Escala de Viabilidad */}
+                  <div className="mt-6 p-4 bg-gray-50 rounded-lg">
+                    <h5 className="text-sm font-semibold text-gray-700 mb-3">Escala de Evaluación:</h5>
+                    <div className="grid grid-cols-2 md:grid-cols-5 gap-2 text-xs">
+                      <div className="text-center">
+                        <div className="bg-red-100 text-red-600 px-2 py-1 rounded">&lt; 1.0</div>
+                        <div className="text-gray-600 mt-1">No Viable</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="bg-orange-100 text-orange-600 px-2 py-1 rounded">1.0-1.2</div>
+                        <div className="text-gray-600 mt-1">Riesgoso</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="bg-yellow-100 text-yellow-600 px-2 py-1 rounded">1.2-1.4</div>
+                        <div className="text-gray-600 mt-1">Aceptable</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="bg-green-100 text-green-600 px-2 py-1 rounded">1.4-1.8</div>
+                        <div className="text-gray-600 mt-1">Óptimo</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="bg-emerald-100 text-emerald-600 px-2 py-1 rounded">&gt; 1.8</div>
+                        <div className="text-gray-600 mt-1">Excelente</div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+
               </div>
             )}
 

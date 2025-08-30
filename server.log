@@ -1,1 +1,18 @@
-nohup: PORT=4321: No such file or directory
+
+> simulador@0.1.0 dev
+> next dev --turbopack
+
+   ▲ Next.js 15.4.6 (Turbopack)
+   - Local:        http://localhost:3000
+   - Network:      http://192.168.0.102:3000
+   - Environments: .env.local, .env
+
+ ✓ Starting...
+ ✓ Ready in 1392ms
+ ○ Compiling /api/authorization-requests ...
+ ✓ Compiled /api/authorization-requests in 1555ms
+ GET /api/authorization-requests?limit=2 200 in 2204ms
+ ○ Compiling /autorizaciones ...
+ ✓ Compiled /autorizaciones in 9.7s
+ GET /autorizaciones 200 in 9984ms
+ GET /api/authorization-requests?limit=100 200 in 733ms

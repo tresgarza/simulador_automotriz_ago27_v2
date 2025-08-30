@@ -112,30 +112,63 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url)
     const limit = parseInt(searchParams.get('limit') || '50')
 
+    // Consulta con JOIN para obtener toda la información relacionada
     const { data: requests, error } = await supabaseClient
       .from('z_auto_authorization_requests')
-      .select('*')
+      .select(`
+        *,
+        z_auto_simulations (
+          id,
+          tier_code,
+          term_months,
+          monthly_payment,
+          total_to_finance,
+          financed_amount,
+          calculated_at
+        ),
+        z_auto_quotes (
+          id,
+          client_name,
+          client_email,
+          client_phone,
+          vehicle_brand,
+          vehicle_model,
+          vehicle_year,
+          vehicle_value,
+          created_at
+        ),
+        assigned_user:z_auto_users!z_auto_authorization_requests_assigned_to_user_id_fkey (
+          id,
+          name,
+          email
+        ),
+        created_user:z_auto_users!z_auto_authorization_requests_created_by_user_id_fkey (
+          id,
+          name,
+          email
+        )
+      `)
       .order('created_at', { ascending: false })
       .limit(limit)
 
     if (error) {
       console.error('Error al obtener solicitudes de autorización:', error)
       return NextResponse.json(
-        { error: 'Error al obtener las solicitudes' },
+        { error: 'Error al obtener las solicitudes: ' + error.message },
         { status: 500 }
       )
     }
 
     return NextResponse.json({
       success: true,
-      authorization_requests: requests,
-      total: requests.length
+      authorization_requests: requests || [],
+      total: requests?.length || 0
     })
 
   } catch (error) {
     console.error('Error en API de solicitudes de autorización (GET):', error)
     return NextResponse.json(
-      { error: 'Error interno del servidor' },
+      { error: 'Error interno del servidor: ' + (error as Error).message },
       { status: 500 }
     )
   }

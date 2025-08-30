@@ -119,3 +119,57 @@ export interface RateTier {
   created_at: string
   updated_at: string
 }
+
+export interface AuthorizationRequest {
+  id: string
+  simulation_id?: string
+  quote_id?: string
+  status: 'pending' | 'approved' | 'rejected' | 'in_review'
+  priority: 'low' | 'medium' | 'high' | 'urgent'
+  
+  // Información del cliente
+  client_name: string
+  client_email?: string
+  client_phone?: string
+  
+  // Información del vehículo
+  vehicle_brand?: string
+  vehicle_model?: string
+  vehicle_year?: number
+  vehicle_value?: number
+  
+  // Información financiera (IMPORTANTES - de aquí viene el pago mensual)
+  requested_amount?: number
+  monthly_payment?: number  // Este es el valor que necesitamos
+  term_months?: number
+  
+  // Información de la agencia/vendedor
+  agency_name?: string
+  dealer_name?: string
+  promoter_code?: string
+  
+  // Usuarios
+  created_by_user_id?: string
+  assigned_to_user_id?: string
+  
+  // Comentarios y notas
+  client_comments?: string
+  internal_notes?: string
+  approval_notes?: string
+  
+  // Evaluación de riesgo
+  risk_level?: 'low' | 'medium' | 'high'
+  
+  // Fechas
+  created_at: string
+  updated_at: string
+  reviewed_at?: string
+  approved_at?: string
+  rejected_at?: string
+  
+  // Relaciones (opcional, para cuando se incluyen en las queries)
+  simulation?: Simulation
+  quote?: Quote
+  created_by_user?: User
+  assigned_to_user?: User
+}

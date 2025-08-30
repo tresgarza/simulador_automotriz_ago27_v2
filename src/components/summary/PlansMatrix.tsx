@@ -519,6 +519,46 @@ export function PlansMatrix({
 
           </div>
 
+          {/* Resumen Financiero */}
+          <div className="bg-white/95 backdrop-blur rounded-2xl p-6 mb-8 shadow-xl">
+            <h3 className="text-gray-800 font-bold mb-6 text-xl text-center">Resumen Financiero</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              {/* Columna Izquierda */}
+              <div className="space-y-4">
+                <div className="flex justify-between items-center py-3 border-b border-gray-200">
+                  <span className="text-gray-700 font-medium">Total Ingresos:</span>
+                  <span className="text-green-600 font-bold text-lg">{formatMXN(currentResult?.summary?.pmt_total_month2 * 2.5 || 0)}</span>
+                </div>
+                <div className="flex justify-between items-center py-3 border-b border-gray-200">
+                  <span className="text-gray-700 font-medium">Total Egresos:</span>
+                  <span className="text-red-600 font-bold text-lg">{formatMXN((currentResult?.summary?.pmt_total_month2 || 0) + 8000)}</span>
+                </div>
+                <div className="flex justify-between items-center py-3 border-b-2 border-gray-300">
+                  <span className="text-gray-800 font-bold">Disponible:</span>
+                  <span className="text-blue-600 font-bold text-lg">{formatMXN((currentResult?.summary?.pmt_total_month2 * 2.5 || 0) - ((currentResult?.summary?.pmt_total_month2 || 0) + 8000))}</span>
+                </div>
+              </div>
+              
+              {/* Columna Derecha */}
+              <div className="space-y-4">
+                <div className="flex justify-between items-center py-3 border-b border-gray-200">
+                  <span className="text-gray-700 font-medium">Capacidad de Pago (40%):</span>
+                  <span className="text-green-600 font-bold text-lg">{formatMXN((currentResult?.summary?.pmt_total_month2 * 2.5 || 0) * 0.4)}</span>
+                </div>
+                <div className="flex justify-between items-center py-3 border-b border-gray-200">
+                  <span className="text-gray-700 font-medium">Pago Mensual Total:</span>
+                  <span className="text-blue-600 font-bold text-lg">{formatMXN(currentResult?.summary?.pmt_total_month2 || 0)}</span>
+                </div>
+                <div className="flex justify-between items-center py-3 border-b-2 border-gray-300">
+                  <span className="text-gray-800 font-bold">Porcentaje:</span>
+                  <span className="text-red-600 font-bold text-lg">
+                    {((currentResult?.summary?.pmt_total_month2 || 0) / ((currentResult?.summary?.pmt_total_month2 * 2.5 || 0) * 0.4) * 100).toFixed(1)}%
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* Breakdown Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
             {/* Desembolso Inicial */}

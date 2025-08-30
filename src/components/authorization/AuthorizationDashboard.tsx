@@ -244,3 +244,4 @@ export function AuthorizationDashboard({ className = "" }: AuthorizationDashboar
     </div>
   );
 }
+
