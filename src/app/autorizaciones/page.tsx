@@ -105,8 +105,23 @@ export default function AutorizacionesPage() {
         throw new Error(result.error || 'Error al cargar solicitudes de autorización');
       }
 
+      // Debug: Log de datos del API antes del mapeo
+      console.log('🔍 API Response - First Request:', {
+        first_request: result.authorization_requests[0],
+        simulation_data: result.authorization_requests[0]?.z_auto_simulations,
+        pmt_total_month2: result.authorization_requests[0]?.z_auto_simulations?.pmt_total_month2
+      });
+
       // Transformar los datos para que coincidan con la interfaz AuthorizationRequest
-      const authorizationRequests: AuthorizationRequest[] = result.authorization_requests.map((authReq: any) => ({
+      const authorizationRequests: AuthorizationRequest[] = result.authorization_requests.map((authReq: any) => {
+        console.log('🔄 Mapping request:', {
+          id: authReq.id,
+          has_simulation: !!authReq.z_auto_simulations,
+          pmt_total_month2_raw: authReq.z_auto_simulations?.pmt_total_month2,
+          monthly_payment_raw: authReq.z_auto_simulations?.monthly_payment
+        });
+        
+        return {
         id: authReq.id,
         simulation: authReq.z_auto_simulations ? {
           id: authReq.z_auto_simulations.id,
@@ -115,7 +130,8 @@ export default function AutorizacionesPage() {
           monthly_payment: authReq.z_auto_simulations.monthly_payment,
           pmt_total_month2: authReq.z_auto_simulations.pmt_total_month2,
           total_to_finance: authReq.z_auto_simulations.total_to_finance,
-          calculated_at: authReq.created_at,
+          financed_amount: authReq.z_auto_simulations.financed_amount,
+          calculated_at: authReq.z_auto_simulations.calculated_at,
           quote: authReq.z_auto_quotes ? {
             id: authReq.z_auto_quotes.id,
             client_name: authReq.z_auto_quotes.client_name,
@@ -150,7 +166,8 @@ export default function AutorizacionesPage() {
         requested_amount: authReq.requested_amount,
         term_months: authReq.term_months,
         authorization_data: authReq.authorization_data
-      }));
+        };
+      });
 
       setRequests(authorizationRequests);
     } catch (error) {

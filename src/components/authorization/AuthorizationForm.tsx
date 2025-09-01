@@ -186,8 +186,9 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
     return 0;
   };
 
-  // Extraer valores numéricos correctos - Usar pmt_total_month2 de la simulación
+  // Extraer valores numéricos correctos - Usar monthly_payment de la simulación como fallback
   const monthlyPaymentValue = getNumericValue(request.simulation?.pmt_total_month2) || 
+                             getNumericValue(request.simulation?.monthly_payment) ||
                              getNumericValue(request.monthly_payment) || 0;
   const vehicleValueValue = getNumericValue(request.vehicle_value);
   const requestedAmountValue = getNumericValue(request.requested_amount);
@@ -202,7 +203,8 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
     simulation_monthly_payment: request.simulation?.monthly_payment,
     pmt_calculation_priority: {
       first: request.simulation?.pmt_total_month2,
-      second: request.monthly_payment,
+      second: request.simulation?.monthly_payment,
+      third: request.monthly_payment,
       final: monthlyPaymentValue
     }
   });
