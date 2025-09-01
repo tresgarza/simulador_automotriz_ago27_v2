@@ -3,6 +3,7 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { FileCheck, Users, Search, Filter, Eye, CheckCircle, XCircle, Clock, ChevronRight } from "lucide-react";
 import { useAuth } from "../../../lib/auth";
 import { SimulationService, SimulationWithQuote } from "../../../lib/simulation-service";
+import { AuthorizationService } from "../../../lib/authorization-service";
 import { formatMXN } from "@/lib/utils";
 import { AuthorizationForm } from "../../components/authorization/AuthorizationForm";
 
@@ -35,7 +36,7 @@ export default function AutorizacionesPage() {
   const [filteredRequests, setFilteredRequests] = useState<AuthorizationRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'in_review' | 'approved' | 'rejected' | 'cancelled'>('all');
   const [selectedRequest, setSelectedRequest] = useState<AuthorizationRequest | null>(null);
   const [showAuthorizationForm, setShowAuthorizationForm] = useState(false);
   const [isHydrated, setIsHydrated] = useState(false);
@@ -187,11 +188,34 @@ export default function AutorizacionesPage() {
     }
   }, [isLoadingData, loadAuthorizationRequests]);
 
+  // Funciones de workflow
+  const handleClaimRequest = async (requestId: string) => {
+    try {
+      await AuthorizationService.claimAuthorizationRequest(requestId);
+      loadAuthorizationRequests(); // Recargar datos
+    } catch (error) {
+      console.error('Error al reclamar solicitud:', error);
+      alert('Error al reclamar la solicitud');
+    }
+  };
+
+  const handleApproveAsAdvisor = async (requestId: string) => {
+    try {
+      await AuthorizationService.markAdvisorReviewed(requestId);
+      loadAuthorizationRequests(); // Recargar datos
+    } catch (error) {
+      console.error('Error al aprobar como asesor:', error);
+      alert('Error al aprobar como asesor');
+    }
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'pending': return 'bg-yellow-100 text-yellow-800';
+      case 'in_review': return 'bg-blue-100 text-blue-800';
       case 'approved': return 'bg-green-100 text-green-800';
       case 'rejected': return 'bg-red-100 text-red-800';
+      case 'cancelled': return 'bg-gray-100 text-gray-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
@@ -199,8 +223,10 @@ export default function AutorizacionesPage() {
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'pending': return <Clock className="w-4 h-4" />;
+      case 'in_review': return <Users className="w-4 h-4" />;
       case 'approved': return <CheckCircle className="w-4 h-4" />;
       case 'rejected': return <XCircle className="w-4 h-4" />;
+      case 'cancelled': return <XCircle className="w-4 h-4" />;
       default: return <Clock className="w-4 h-4" />;
     }
   };
@@ -210,16 +236,20 @@ export default function AutorizacionesPage() {
     if (!isHydrated || requests.length === 0) {
       return {
         pending: 0,
+        in_review: 0,
         approved: 0,
         rejected: 0,
+        cancelled: 0,
         total: 0
       };
     }
 
     return {
       pending: requests.filter(r => r.status === 'pending').length,
+      in_review: requests.filter(r => r.status === 'in_review').length,
       approved: requests.filter(r => r.status === 'approved').length,
       rejected: requests.filter(r => r.status === 'rejected').length,
+      cancelled: requests.filter(r => r.status === 'cancelled').length,
       total: requests.length
     };
   }, [requests, isHydrated]);
@@ -266,43 +296,63 @@ export default function AutorizacionesPage() {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <div className="bg-white p-6 rounded-2xl shadow-lg border border-gray-100">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
+          <div className="bg-white p-4 rounded-2xl shadow-lg border border-gray-100">
             <div className="flex items-center">
-              <div className="p-3 bg-yellow-100 rounded-xl">
-                <Clock className="w-6 h-6 text-yellow-600" />
+              <div className="p-2 bg-yellow-100 rounded-lg">
+                <Clock className="w-5 h-5 text-yellow-600" />
               </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Pendientes</p>
-                <p className="text-2xl font-bold text-gray-900">
-                  {stats.pending}
-                </p>
+              <div className="ml-3">
+                <p className="text-xs font-medium text-gray-600 uppercase tracking-wider">Pendientes</p>
+                <p className="text-xl font-bold text-gray-900">{stats.pending}</p>
               </div>
             </div>
           </div>
 
-          <div className="bg-white p-6 rounded-2xl shadow-lg border border-gray-100">
+          <div className="bg-white p-4 rounded-2xl shadow-lg border border-gray-100">
             <div className="flex items-center">
-              <div className="p-3 bg-green-100 rounded-xl">
-                <CheckCircle className="w-6 h-6 text-green-600" />
+              <div className="p-2 bg-blue-100 rounded-lg">
+                <Users className="w-5 h-5 text-blue-600" />
               </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Aprobadas</p>
-                <p className="text-2xl font-bold text-gray-900">
-                  {stats.approved}
-                </p>
+              <div className="ml-3">
+                <p className="text-xs font-medium text-gray-600 uppercase tracking-wider">En Revisión</p>
+                <p className="text-xl font-bold text-gray-900">{stats.in_review}</p>
               </div>
             </div>
           </div>
 
-          <div className="bg-white p-6 rounded-2xl shadow-lg border border-gray-100">
+          <div className="bg-white p-4 rounded-2xl shadow-lg border border-gray-100">
             <div className="flex items-center">
-              <div className="p-3 bg-blue-100 rounded-xl">
-                <Users className="w-6 h-6 text-blue-600" />
+              <div className="p-2 bg-green-100 rounded-lg">
+                <CheckCircle className="w-5 h-5 text-green-600" />
               </div>
-              <div className="ml-4">
-                <p className="text-sm font-medium text-gray-600">Total Solicitudes</p>
-                <p className="text-2xl font-bold text-gray-900">{stats.total}</p>
+              <div className="ml-3">
+                <p className="text-xs font-medium text-gray-600 uppercase tracking-wider">Aprobadas</p>
+                <p className="text-xl font-bold text-gray-900">{stats.approved}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white p-4 rounded-2xl shadow-lg border border-gray-100">
+            <div className="flex items-center">
+              <div className="p-2 bg-red-100 rounded-lg">
+                <XCircle className="w-5 h-5 text-red-600" />
+              </div>
+              <div className="ml-3">
+                <p className="text-xs font-medium text-gray-600 uppercase tracking-wider">Rechazadas</p>
+                <p className="text-xl font-bold text-gray-900">{stats.rejected}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-white p-4 rounded-2xl shadow-lg border border-gray-100">
+            <div className="flex items-center">
+              <div className="p-2 bg-gray-100 rounded-lg">
+                <FileCheck className="w-5 h-5 text-gray-600" />
+              </div>
+              <div className="ml-3">
+                <p className="text-xs font-medium text-gray-600 uppercase tracking-wider">Total</p>
+                <p className="text-xl font-bold text-gray-900">{stats.total}</p>
               </div>
             </div>
           </div>
@@ -324,12 +374,14 @@ export default function AutorizacionesPage() {
               </div>
             </div>
 
-            <div className="flex gap-2">
+            <div className="flex gap-2 flex-wrap">
               {[
                 { value: 'all', label: 'Todas' },
                 { value: 'pending', label: 'Pendientes' },
+                { value: 'in_review', label: 'En Revisión' },
                 { value: 'approved', label: 'Aprobadas' },
-                { value: 'rejected', label: 'Rechazadas' }
+                { value: 'rejected', label: 'Rechazadas' },
+                { value: 'cancelled', label: 'Canceladas' }
               ].map((filter) => (
                 <button
                   key={filter.value}
@@ -401,21 +453,51 @@ export default function AutorizacionesPage() {
                     <td className="px-6 py-4 whitespace-nowrap">
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(request.status)}`}>
                         {getStatusIcon(request.status)}
-                        <span className="ml-1 capitalize">{request.status === 'pending' ? 'Pendiente' : request.status === 'approved' ? 'Aprobada' : 'Rechazada'}</span>
+                        <span className="ml-1 capitalize">
+                          {request.status === 'pending' ? 'Pendiente' : 
+                           request.status === 'in_review' ? 'En Revisión' :
+                           request.status === 'approved' ? 'Aprobada' : 
+                           request.status === 'rejected' ? 'Rechazada' :
+                           request.status === 'cancelled' ? 'Cancelada' : request.status}
+                        </span>
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {new Date(request.createdAt).toLocaleDateString()}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                      <button
-                        onClick={() => handleAuthorizeRequest(request)}
-                        className="inline-flex items-center px-3 py-2 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-700 transition-colors"
-                      >
-                        <Eye className="w-4 h-4 mr-2" />
-                        Revisar
-                        <ChevronRight className="w-4 h-4 ml-2" />
-                      </button>
+                      <div className="flex gap-2">
+                        {/* Botón Revisar */}
+                        <button
+                          onClick={() => handleAuthorizeRequest(request)}
+                          className="inline-flex items-center px-2 py-1 bg-emerald-600 text-white text-xs font-medium rounded hover:bg-emerald-700 transition-colors"
+                        >
+                          <Eye className="w-3 h-3 mr-1" />
+                          Revisar
+                        </button>
+
+                        {/* Botón Reclamar (solo para pendientes) */}
+                        {request.status === 'pending' && (
+                          <button
+                            onClick={() => handleClaimRequest(request.id)}
+                            className="inline-flex items-center px-2 py-1 bg-blue-600 text-white text-xs font-medium rounded hover:bg-blue-700 transition-colors"
+                          >
+                            <Users className="w-3 h-3 mr-1" />
+                            Reclamar
+                          </button>
+                        )}
+
+                        {/* Botón Aprobar como Asesor (solo para reclamadas) */}
+                        {request.status === 'in_review' && (
+                          <button
+                            onClick={() => handleApproveAsAdvisor(request.id)}
+                            className="inline-flex items-center px-2 py-1 bg-green-600 text-white text-xs font-medium rounded hover:bg-green-700 transition-colors"
+                          >
+                            <CheckCircle className="w-3 h-3 mr-1" />
+                            Aprobar
+                          </button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
