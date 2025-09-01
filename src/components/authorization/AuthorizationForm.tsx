@@ -201,6 +201,8 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
     simulation_exists: !!request.simulation,
     simulation_pmt_total_month2: request.simulation?.pmt_total_month2,
     simulation_monthly_payment: request.simulation?.monthly_payment,
+    authorization_data_exists: !!request.authorization_data,
+    authorization_data: request.authorization_data,
     pmt_calculation_priority: {
       first: request.simulation?.pmt_total_month2,
       second: request.simulation?.monthly_payment,
@@ -221,24 +223,35 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
   } = useForm({
     resolver: zodResolver(AuthorizationSchema),
     defaultValues: {
-      // Paso 1: Datos automáticos de Supabase
-      applicant_name: request.simulation?.quote?.client_name || request.client_name || "",
-      requested_amount: requestedAmountValue || vehicleValueValue || 0,
-      term_months: request.simulation?.term_months || request.term_months || 48,
-      interest_rate: request.simulation?.tier_code === 'A' ? 36 : request.simulation?.tier_code === 'B' ? 42 : 45,
-      opening_fee: 3.0928, // Comisión real del sistema (3% / 0.97)
-      monthly_capacity: monthlyPaymentValue, // Capacidad de pago = Pago mensual de la solicitud (convertido)
-      monthly_discount: monthlyPaymentValue, // Descuento mensual = Pago mensual de la solicitud (convertido)
+      // Cargar datos guardados si existen, sino usar valores por defecto
+      // Paso 1: Datos del solicitante (usar authorization_data si existe)
+      company: request.authorization_data?.company || "",
+      applicant_name: request.authorization_data?.applicant_name || request.simulation?.quote?.client_name || request.client_name || "",
+      position: request.authorization_data?.position || "",
+      age: request.authorization_data?.age || undefined,
+      marital_status: request.authorization_data?.marital_status || "soltero",
+      seniority: request.authorization_data?.seniority || undefined,
+      monthly_salary: request.authorization_data?.monthly_salary || undefined,
       
-      // Paso 3: Datos del vehículo de Supabase
-      dealership: request.agency_name || "Agencia no especificada",
-      vehicle_brand: request.simulation?.quote?.vehicle_brand || request.vehicle_brand || "",
-      vehicle_model: request.simulation?.quote?.vehicle_model || request.vehicle_model || "",
-      vehicle_year: request.simulation?.quote?.vehicle_year || request.vehicle_year || new Date().getFullYear(),
-      sale_value: vehicleValueValue || 0,
-      book_value: vehicleValueValue || 0, // Usar mismo valor como base
-      // Valores por defecto para ingresos (estructura simple)
-      mes1_nomina: undefined,
+      // Paso 2: Datos financieros
+      requested_amount: request.authorization_data?.requested_amount || requestedAmountValue || vehicleValueValue || 0,
+      term_months: request.authorization_data?.term_months || request.simulation?.term_months || request.term_months || 48,
+      interest_rate: request.authorization_data?.interest_rate || (request.simulation?.tier_code === 'A' ? 36 : request.simulation?.tier_code === 'B' ? 42 : 45),
+      opening_fee: request.authorization_data?.opening_fee || 3.0928,
+      monthly_capacity: request.authorization_data?.monthly_capacity || monthlyPaymentValue,
+      monthly_discount: request.authorization_data?.monthly_discount || monthlyPaymentValue,
+      comments: request.authorization_data?.comments || "",
+      
+      // Paso 3: Datos del vehículo (usar authorization_data si existe)
+      dealership: request.authorization_data?.dealership || request.agency_name || "Agencia no especificada",
+      vehicle_brand: request.authorization_data?.vehicle_brand || request.simulation?.quote?.vehicle_brand || request.vehicle_brand || "",
+      vehicle_model: request.authorization_data?.vehicle_model || request.simulation?.quote?.vehicle_model || request.vehicle_model || "",
+      vehicle_year: request.authorization_data?.vehicle_year || request.simulation?.quote?.vehicle_year || request.vehicle_year || new Date().getFullYear(),
+      sale_value: request.authorization_data?.sale_value || vehicleValueValue || 0,
+      book_value: request.authorization_data?.book_value || vehicleValueValue || 0,
+      
+      // Valores para ingresos (cargar desde authorization_data si existe)
+      mes1_nomina: request.authorization_data?.incomes?.[0]?.nomina || undefined,
       mes1_comisiones: undefined,
       mes1_negocio: undefined,
       mes1_efectivo: undefined,
