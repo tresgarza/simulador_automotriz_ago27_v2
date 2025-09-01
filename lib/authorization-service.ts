@@ -481,4 +481,170 @@ export class AuthorizationService {
       return { request: null, error: 'Error interno del servidor' }
     }
   }
+
+  // Funciones del workflow de autorizaciones
+
+  // Reclamar una solicitud por un asesor
+  static async claimAuthorizationRequest(
+    requestId: string,
+    advisorId: string
+  ): Promise<{ success: boolean, error: string | null }> {
+    try {
+      const { data, error } = await supabaseClient.rpc('claim_authorization_request', {
+        p_request_id: requestId,
+        p_advisor_id: advisorId
+      })
+
+      if (error) {
+        console.error('Error claiming authorization request:', error)
+        return { success: false, error: error.message }
+      }
+
+      return { success: data || false, error: null }
+    } catch (error) {
+      console.error('Error in claimAuthorizationRequest:', error)
+      return { success: false, error: 'Error interno del servidor' }
+    }
+  }
+
+  // Marcar como revisado por asesor
+  static async markAdvisorReviewed(
+    requestId: string,
+    advisorId: string,
+    notes?: string
+  ): Promise<{ success: boolean, error: string | null }> {
+    try {
+      const { data, error } = await supabaseClient.rpc('mark_advisor_reviewed', {
+        p_request_id: requestId,
+        p_advisor_id: advisorId,
+        p_notes: notes
+      })
+
+      if (error) {
+        console.error('Error marking advisor reviewed:', error)
+        return { success: false, error: error.message }
+      }
+
+      return { success: data || false, error: null }
+    } catch (error) {
+      console.error('Error in markAdvisorReviewed:', error)
+      return { success: false, error: 'Error interno del servidor' }
+    }
+  }
+
+  // Aprobar por comité interno
+  static async approveByInternalCommittee(
+    requestId: string,
+    committeeMemberId: string,
+    notes?: string
+  ): Promise<{ success: boolean, error: string | null }> {
+    try {
+      const { data, error } = await supabaseClient.rpc('approve_by_internal_committee', {
+        p_request_id: requestId,
+        p_committee_member_id: committeeMemberId,
+        p_notes: notes
+      })
+
+      if (error) {
+        console.error('Error approving by internal committee:', error)
+        return { success: false, error: error.message }
+      }
+
+      return { success: data || false, error: null }
+    } catch (error) {
+      console.error('Error in approveByInternalCommittee:', error)
+      return { success: false, error: 'Error interno del servidor' }
+    }
+  }
+
+  // Aprobar por comité de socios (final)
+  static async approveByPartnersCommittee(
+    requestId: string,
+    committeeMemberId: string,
+    notes?: string
+  ): Promise<{ success: boolean, error: string | null }> {
+    try {
+      const { data, error } = await supabaseClient.rpc('approve_by_partners_committee', {
+        p_request_id: requestId,
+        p_committee_member_id: committeeMemberId,
+        p_notes: notes
+      })
+
+      if (error) {
+        console.error('Error approving by partners committee:', error)
+        return { success: false, error: error.message }
+      }
+
+      return { success: data || false, error: null }
+    } catch (error) {
+      console.error('Error in approveByPartnersCommittee:', error)
+      return { success: false, error: 'Error interno del servidor' }
+    }
+  }
+
+  // Rechazar solicitud en cualquier etapa
+  static async rejectAuthorizationRequest(
+    requestId: string,
+    userId: string,
+    notes: string,
+    stage: string = 'general'
+  ): Promise<{ success: boolean, error: string | null }> {
+    try {
+      const { data, error } = await supabaseClient.rpc('reject_authorization_request', {
+        p_request_id: requestId,
+        p_user_id: userId,
+        p_notes: notes,
+        p_stage: stage
+      })
+
+      if (error) {
+        console.error('Error rejecting authorization request:', error)
+        return { success: false, error: error.message }
+      }
+
+      return { success: data || false, error: null }
+    } catch (error) {
+      console.error('Error in rejectAuthorizationRequest:', error)
+      return { success: false, error: 'Error interno del servidor' }
+    }
+  }
+
+  // Obtener vista completa del workflow
+  static async getAuthorizationWorkflowView(): Promise<{ workflows: any[], error: string | null }> {
+    try {
+      const { data, error } = await supabaseClient
+        .from('authorization_workflow_view')
+        .select('*')
+        .order('created_at', { ascending: false })
+
+      if (error) {
+        console.error('Error fetching workflow view:', error)
+        return { workflows: [], error: error.message }
+      }
+
+      return { workflows: data || [], error: null }
+    } catch (error) {
+      console.error('Error in getAuthorizationWorkflowView:', error)
+      return { workflows: [], error: 'Error interno del servidor' }
+    }
+  }
+
+  // Verificar si un usuario es del comité
+  static async isCommitteeMember(userId: string): Promise<boolean> {
+    try {
+      const { data, error } = await supabaseClient.rpc('is_internal_committee_member', {
+        p_user_id: userId
+      })
+
+      if (error) {
+        console.error('Error checking committee membership:', error)
+        return false
+      }
+
+      return data || false
+    } catch (error) {
+      console.error('Error in isCommitteeMember:', error)
+      return false
+    }
+  }
 }

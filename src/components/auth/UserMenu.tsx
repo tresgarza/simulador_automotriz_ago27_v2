@@ -1,7 +1,7 @@
 "use client";
 import { useState } from "react";
 import Link from "next/link";
-import { User, LogOut, Settings, FileText, BarChart3, ChevronDown, FileCheck } from "lucide-react";
+import { User, LogOut, Settings, FileText, BarChart3, ChevronDown, FileCheck, Users } from "lucide-react";
 import { useAuth } from "../../../lib/auth";
 
 export function UserMenu() {
@@ -93,6 +93,12 @@ export function UserMenu() {
                     <button className="w-full flex items-center space-x-3 px-3 py-2 text-gray-700 hover:bg-gray-50 rounded-xl transition-colors">
                       <FileCheck className="w-4 h-4" />
                       <span>Sistema de Autorizaciones</span>
+                    </button>
+                  </Link>
+                  <Link href="/autorizaciones/workflow" onClick={() => setIsOpen(false)}>
+                    <button className="w-full flex items-center space-x-3 px-3 py-2 text-gray-700 hover:bg-gray-50 rounded-xl transition-colors">
+                      <Users className="w-4 h-4" />
+                      <span>Workflow de Autorizaciones</span>
                     </button>
                   </Link>
                   <Link href="#" onClick={() => setIsOpen(false)}>
