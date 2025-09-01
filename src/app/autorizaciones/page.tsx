@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { FileCheck, Users, Search, Filter, Eye, CheckCircle, XCircle, Clock, ChevronRight } from "lucide-react";
+import { FileCheck, Users, Search, Filter, Eye, CheckCircle, XCircle, Clock, ChevronRight, Grid, List, Trash2, UserCheck, AlertTriangle, Calendar, User } from "lucide-react";
 import { useAuth } from "../../../lib/auth";
 import { SimulationService, SimulationWithQuote } from "../../../lib/simulation-service";
 import { AuthorizationService } from "../../../lib/authorization-service";
@@ -42,6 +42,7 @@ export default function AutorizacionesPage() {
   const [isHydrated, setIsHydrated] = useState(false);
   const [isLoadingData, setIsLoadingData] = useState(false);
   const [authDetermined, setAuthDetermined] = useState(false);
+  const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards'); // Default to cards view
   const hasInitiatedLoading = useRef(false);
 
   // Handle hydration
@@ -170,7 +171,7 @@ export default function AutorizacionesPage() {
 
   useEffect(() => {
     if (isHydrated) {
-      filterRequests();
+    filterRequests();
     }
   }, [filterRequests, isHydrated]);
 
@@ -184,7 +185,7 @@ export default function AutorizacionesPage() {
     setShowAuthorizationForm(false);
     // Only reload if we're not already loading
     if (!isLoadingData) {
-      loadAuthorizationRequests();
+    loadAuthorizationRequests();
     }
   }, [isLoadingData, loadAuthorizationRequests]);
 
@@ -206,6 +207,32 @@ export default function AutorizacionesPage() {
     } catch (error) {
       console.error('Error al aprobar como asesor:', error);
       alert('Error al aprobar como asesor');
+    }
+  };
+
+  const handleRejectRequest = async (requestId: string) => {
+    const reason = prompt('¿Motivo del rechazo?');
+    if (!reason) return;
+    
+    try {
+      await AuthorizationService.rejectAuthorizationRequest(requestId, reason);
+      loadAuthorizationRequests(); // Recargar datos
+    } catch (error) {
+      console.error('Error al rechazar solicitud:', error);
+      alert('Error al rechazar la solicitud');
+    }
+  };
+
+  const handleDiscardRequest = async (requestId: string) => {
+    if (!confirm('¿Estás seguro de que deseas descartar esta solicitud?')) return;
+    
+    try {
+      // Usar el endpoint de reject pero con estado cancelled
+      await AuthorizationService.rejectAuthorizationRequest(requestId, 'Solicitud descartada por el asesor');
+      loadAuthorizationRequests(); // Recargar datos
+    } catch (error) {
+      console.error('Error al descartar solicitud:', error);
+      alert('Error al descartar la solicitud');
     }
   };
 
@@ -290,8 +317,8 @@ export default function AutorizacionesPage() {
         <div className="mb-8">
           <h1 className="text-3xl font-bold text-gray-900 mb-2 flex items-center">
             <FileCheck className="w-8 h-8 mr-3 text-emerald-600" />
-            Sistema de Autorizaciones
-          </h1>
+                Sistema de Autorizaciones
+              </h1>
           <p className="text-gray-600">Gestión de solicitudes de crédito automotriz</p>
         </div>
 
@@ -301,55 +328,55 @@ export default function AutorizacionesPage() {
             <div className="flex items-center">
               <div className="p-2 bg-yellow-100 rounded-lg">
                 <Clock className="w-5 h-5 text-yellow-600" />
-              </div>
+                </div>
               <div className="ml-3">
                 <p className="text-xs font-medium text-gray-600 uppercase tracking-wider">Pendientes</p>
                 <p className="text-xl font-bold text-gray-900">{stats.pending}</p>
               </div>
             </div>
-          </div>
+                </div>
 
           <div className="bg-white p-4 rounded-2xl shadow-lg border border-gray-100">
             <div className="flex items-center">
               <div className="p-2 bg-blue-100 rounded-lg">
                 <Users className="w-5 h-5 text-blue-600" />
-              </div>
+                </div>
               <div className="ml-3">
                 <p className="text-xs font-medium text-gray-600 uppercase tracking-wider">En Revisión</p>
                 <p className="text-xl font-bold text-gray-900">{stats.in_review}</p>
               </div>
             </div>
-          </div>
+                </div>
 
           <div className="bg-white p-4 rounded-2xl shadow-lg border border-gray-100">
             <div className="flex items-center">
               <div className="p-2 bg-green-100 rounded-lg">
                 <CheckCircle className="w-5 h-5 text-green-600" />
-              </div>
+                </div>
               <div className="ml-3">
                 <p className="text-xs font-medium text-gray-600 uppercase tracking-wider">Aprobadas</p>
                 <p className="text-xl font-bold text-gray-900">{stats.approved}</p>
               </div>
             </div>
-          </div>
+                </div>
 
           <div className="bg-white p-4 rounded-2xl shadow-lg border border-gray-100">
             <div className="flex items-center">
               <div className="p-2 bg-red-100 rounded-lg">
                 <XCircle className="w-5 h-5 text-red-600" />
-              </div>
+                </div>
               <div className="ml-3">
                 <p className="text-xs font-medium text-gray-600 uppercase tracking-wider">Rechazadas</p>
                 <p className="text-xl font-bold text-gray-900">{stats.rejected}</p>
               </div>
             </div>
-          </div>
+                </div>
 
           <div className="bg-white p-4 rounded-2xl shadow-lg border border-gray-100">
             <div className="flex items-center">
               <div className="p-2 bg-gray-100 rounded-lg">
                 <FileCheck className="w-5 h-5 text-gray-600" />
-              </div>
+                </div>
               <div className="ml-3">
                 <p className="text-xs font-medium text-gray-600 uppercase tracking-wider">Total</p>
                 <p className="text-xl font-bold text-gray-900">{stats.total}</p>
@@ -374,45 +401,74 @@ export default function AutorizacionesPage() {
               </div>
             </div>
 
-            <div className="flex gap-2 flex-wrap">
-              {[
-                { value: 'all', label: 'Todas' },
-                { value: 'pending', label: 'Pendientes' },
-                { value: 'in_review', label: 'En Revisión' },
-                { value: 'approved', label: 'Aprobadas' },
-                { value: 'rejected', label: 'Rechazadas' },
-                { value: 'cancelled', label: 'Canceladas' }
-              ].map((filter) => (
+                        <div className="flex gap-4 items-center">
+              <div className="flex gap-2 flex-wrap">
+                {[
+                  { value: 'all', label: 'Todas' },
+                  { value: 'pending', label: 'Pendientes' },
+                  { value: 'in_review', label: 'En Revisión' },
+                  { value: 'approved', label: 'Aprobadas' },
+                  { value: 'rejected', label: 'Rechazadas' },
+                  { value: 'cancelled', label: 'Canceladas' }
+                ].map((filter) => (
+                  <button
+                    key={filter.value}
+                    onClick={() => setStatusFilter(filter.value as any)}
+                    className={`px-4 py-3 rounded-xl font-medium transition-colors ${
+                      statusFilter === filter.value
+                        ? 'bg-emerald-600 text-white'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    {filter.label}
+                  </button>
+                ))}
+              </div>
+
+              {/* View Toggle */}
+              <div className="flex border border-gray-300 rounded-xl overflow-hidden">
                 <button
-                  key={filter.value}
-                  onClick={() => setStatusFilter(filter.value as any)}
-                  className={`px-4 py-3 rounded-xl font-medium transition-colors ${
-                    statusFilter === filter.value
+                  onClick={() => setViewMode('cards')}
+                  className={`px-4 py-3 flex items-center gap-2 transition-colors ${
+                    viewMode === 'cards'
                       ? 'bg-emerald-600 text-white'
-                      : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                      : 'bg-white text-gray-700 hover:bg-gray-50'
                   }`}
                 >
-                  {filter.label}
+                  <Grid className="w-4 h-4" />
+                  Tarjetas
                 </button>
-              ))}
+                <button
+                  onClick={() => setViewMode('table')}
+                  className={`px-4 py-3 flex items-center gap-2 transition-colors ${
+                    viewMode === 'table'
+                      ? 'bg-emerald-600 text-white'
+                      : 'bg-white text-gray-700 hover:bg-gray-50'
+                  }`}
+                >
+                  <List className="w-4 h-4" />
+                  Tabla
+                </button>
+              </div>
             </div>
           </div>
         </div>
 
         {/* Requests List */}
-        <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
+        {viewMode === 'table' ? (
+          <div className="bg-white rounded-2xl shadow-lg border border-gray-100 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full">
               <thead className="bg-gray-50">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Cliente
+                      Cliente
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Vehículo
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Monto Solicitado
+                      Monto Solicitado
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Estado
@@ -454,9 +510,9 @@ export default function AutorizacionesPage() {
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(request.status)}`}>
                         {getStatusIcon(request.status)}
                         <span className="ml-1 capitalize">
-                          {request.status === 'pending' ? 'Pendiente' : 
+                          {request.status === 'pending' ? 'Pendiente' :
                            request.status === 'in_review' ? 'En Revisión' :
-                           request.status === 'approved' ? 'Aprobada' : 
+                           request.status === 'approved' ? 'Aprobada' :
                            request.status === 'rejected' ? 'Rechazada' :
                            request.status === 'cancelled' ? 'Cancelada' : request.status}
                         </span>
@@ -468,13 +524,13 @@ export default function AutorizacionesPage() {
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <div className="flex gap-2">
                         {/* Botón Revisar */}
-                        <button
-                          onClick={() => handleAuthorizeRequest(request)}
+                      <button
+                        onClick={() => handleAuthorizeRequest(request)}
                           className="inline-flex items-center px-2 py-1 bg-emerald-600 text-white text-xs font-medium rounded hover:bg-emerald-700 transition-colors"
-                        >
+                      >
                           <Eye className="w-3 h-3 mr-1" />
-                          Revisar
-                        </button>
+                        Revisar
+                      </button>
 
                         {/* Botón Reclamar (solo para pendientes) */}
                         {request.status === 'pending' && (
@@ -502,22 +558,180 @@ export default function AutorizacionesPage() {
                   </tr>
                 ))}
               </tbody>
-            </table>
-          </div>
-
-          {filteredRequests.length === 0 && (
-            <div className="text-center py-12">
-              <FileCheck className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No se encontraron solicitudes</h3>
-              <p className="text-gray-600">
-                {searchTerm || statusFilter !== 'all'
-                  ? 'Intenta ajustar los filtros de búsqueda'
-                  : 'No hay solicitudes pendientes de autorización'
-                }
-              </p>
+              </table>
             </div>
-          )}
-        </div>
+
+            {filteredRequests.length === 0 && (
+              <div className="text-center py-12">
+                <FileCheck className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">No se encontraron solicitudes</h3>
+                <p className="text-gray-600">
+                  {searchTerm || statusFilter !== 'all'
+                    ? 'Intenta ajustar los filtros de búsqueda'
+                    : 'No hay solicitudes pendientes de autorización'
+                  }
+                </p>
+              </div>
+            )}
+          </div>
+        ) : (
+          /* Cards View */
+          <div className="space-y-4">
+            {filteredRequests.length === 0 ? (
+              <div className="text-center py-12 bg-white rounded-2xl shadow-lg border border-gray-100">
+                <FileCheck className="w-16 h-16 text-gray-400 mx-auto mb-4" />
+                <h3 className="text-lg font-medium text-gray-900 mb-2">No se encontraron solicitudes</h3>
+                <p className="text-gray-600">
+                  {searchTerm || statusFilter !== 'all'
+                    ? 'Intenta ajustar los filtros de búsqueda'
+                    : 'No hay solicitudes pendientes de autorización'}
+                </p>
+              </div>
+            ) : (
+              filteredRequests.map((request) => (
+                <div key={request.id} className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6 hover:shadow-xl transition-shadow">
+                  {/* Card Header */}
+                  <div className="flex justify-between items-start mb-4">
+                    <div className="flex items-center space-x-3">
+                      <div className="w-12 h-12 bg-gradient-to-br from-emerald-500 to-cyan-600 rounded-full flex items-center justify-center">
+                        <User className="w-6 h-6 text-white" />
+                      </div>
+                      <div>
+                        <h3 className="text-lg font-semibold text-gray-900">
+                          {request.simulation?.quote?.client_name || request.client_name || 'Cliente Anónimo'}
+                        </h3>
+                        <p className="text-sm text-gray-500">
+                          {request.simulation?.quote?.client_email || request.client_email || 
+                           request.simulation?.quote?.client_phone || request.client_phone || 'Sin contacto'}
+                        </p>
+                      </div>
+                    </div>
+                    
+                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(request.status)}`}>
+                      {getStatusIcon(request.status)}
+                      <span className="ml-2">
+                        {request.status === 'pending' ? 'Pendiente' : 
+                         request.status === 'in_review' ? 'En Revisión' :
+                         request.status === 'approved' ? 'Aprobada' : 
+                         request.status === 'rejected' ? 'Rechazada' :
+                         request.status === 'cancelled' ? 'Cancelada' : request.status}
+                      </span>
+                    </span>
+                  </div>
+
+                  {/* Card Content */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                    {/* Vehicle Info */}
+                    <div className="bg-gray-50 rounded-lg p-3">
+                      <div className="flex items-center mb-2">
+                        <Calendar className="w-4 h-4 text-gray-500 mr-2" />
+                        <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">Vehículo</span>
+                      </div>
+                      <p className="text-sm font-medium text-gray-900">
+                        {request.simulation?.quote?.vehicle_brand || request.vehicle_brand || 'N/A'} {request.simulation?.quote?.vehicle_model || request.vehicle_model || ''}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        {request.simulation?.quote?.vehicle_year || request.vehicle_year || 'N/A'}
+                      </p>
+                    </div>
+
+                    {/* Amount */}
+                    <div className="bg-gray-50 rounded-lg p-3">
+                      <div className="flex items-center mb-2">
+                        <FileCheck className="w-4 h-4 text-gray-500 mr-2" />
+                        <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">Monto</span>
+                      </div>
+                      <p className="text-sm font-medium text-gray-900">
+                        {formatMXN(request.simulation?.quote?.vehicle_value || request.vehicle_value || 0)}
+                      </p>
+                    </div>
+
+                    {/* Date */}
+                    <div className="bg-gray-50 rounded-lg p-3">
+                      <div className="flex items-center mb-2">
+                        <Clock className="w-4 h-4 text-gray-500 mr-2" />
+                        <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha</span>
+                      </div>
+                      <p className="text-sm font-medium text-gray-900">
+                        {new Date(request.createdAt).toLocaleDateString()}
+                      </p>
+                      <p className="text-xs text-gray-500">
+                        {new Date(request.createdAt).toLocaleTimeString()}
+                      </p>
+                    </div>
+
+                    {/* Advisor Info */}
+                    <div className="bg-gray-50 rounded-lg p-3">
+                      <div className="flex items-center mb-2">
+                        <UserCheck className="w-4 h-4 text-gray-500 mr-2" />
+                        <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">Asesor</span>
+                      </div>
+                      <p className="text-sm font-medium text-gray-900">
+                        {request.reviewerName || 'Sin asignar'}
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Actions */}
+                  <div className="flex gap-2 flex-wrap">
+                    {/* Revisar */}
+                    <button
+                      onClick={() => handleAuthorizeRequest(request)}
+                      className="inline-flex items-center px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-700 transition-colors"
+                    >
+                      <Eye className="w-4 h-4 mr-2" />
+                      Revisar
+                    </button>
+
+                    {/* Reclamar (solo para pendientes) */}
+                    {request.status === 'pending' && (
+                      <button
+                        onClick={() => handleClaimRequest(request.id)}
+                        className="inline-flex items-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+                      >
+                        <Users className="w-4 h-4 mr-2" />
+                        Reclamar
+                      </button>
+                    )}
+
+                    {/* Aprobar como Asesor (solo para reclamadas) */}
+                    {request.status === 'in_review' && (
+                      <button
+                        onClick={() => handleApproveAsAdvisor(request.id)}
+                        className="inline-flex items-center px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors"
+                      >
+                        <CheckCircle className="w-4 h-4 mr-2" />
+                        Aprobar
+                      </button>
+                    )}
+
+                    {/* Rechazar */}
+                    {(request.status === 'pending' || request.status === 'in_review') && (
+                      <button
+                        onClick={() => handleRejectRequest(request.id)}
+                        className="inline-flex items-center px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 transition-colors"
+                      >
+                        <XCircle className="w-4 h-4 mr-2" />
+                        Rechazar
+                      </button>
+                    )}
+
+                    {/* Descartar */}
+                    {(request.status === 'pending' || request.status === 'in_review') && (
+                      <button
+                        onClick={() => handleDiscardRequest(request.id)}
+                        className="inline-flex items-center px-4 py-2 bg-gray-600 text-white text-sm font-medium rounded-lg hover:bg-gray-700 transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4 mr-2" />
+                        Descartar
+                      </button>
+                    )}
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        )}
       </div>
 
       {/* Authorization Form Modal */}
