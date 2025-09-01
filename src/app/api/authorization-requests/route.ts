@@ -46,11 +46,36 @@ export async function POST(request: NextRequest) {
       )
     }
 
+    // Lógica de auto-asignación: si un asesor crea la solicitud, se auto-asigna
+    let finalStatus = 'pending';
+    let finalAssignedToUserId = assigned_to_user_id || null;
+    
+    // Si hay created_by_user_id, verificar si es asesor y auto-asignar
+    if (created_by_user_id) {
+      try {
+        const { data: userData, error: userError } = await supabaseClient
+          .from('z_auto_users')
+          .select('user_type')
+          .eq('id', created_by_user_id)
+          .single();
+        
+        if (!userError && userData?.user_type === 'asesor') {
+          // Auto-asignar al asesor que creó la solicitud
+          finalAssignedToUserId = created_by_user_id;
+          finalStatus = 'in_review'; // Cambiar estado a "en revisión" automáticamente
+          console.log('🎯 [AUTO-ASSIGN] Asesor auto-asignado:', created_by_user_id);
+        }
+      } catch (error) {
+        console.warn('⚠️ [WARNING] Error verificando tipo de usuario para auto-asignación:', error);
+        // Continuar sin auto-asignación en caso de error
+      }
+    }
+
     // Preparar datos para inserción básica
     const authRequestData = {
       simulation_id: simulation_id || null,
       quote_id: quote_id || null,
-      status: 'pending',
+      status: finalStatus,
       priority,
       client_name: client_name || 'Cliente no especificado',
       client_email: client_email || null,
@@ -66,9 +91,9 @@ export async function POST(request: NextRequest) {
       dealer_name: dealer_name || null,
       promoter_code: promoter_code || null,
       created_by_user_id: created_by_user_id || null,
-      assigned_to_user_id: assigned_to_user_id || null,
+      assigned_to_user_id: finalAssignedToUserId,
       client_comments: client_comments || null,
-      internal_notes: internal_notes || null,
+      internal_notes: internal_notes || `${internal_notes || ''}${finalAssignedToUserId === created_by_user_id ? ' [AUTO-ASIGNADO AL ASESOR CREADOR]' : ''}`.trim(),
       risk_level,
       ip_address: ip_address || null,
       user_agent: user_agent || null,
