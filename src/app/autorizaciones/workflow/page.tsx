@@ -56,15 +56,15 @@ export default function AuthorizationWorkflowPage() {
       userType: user?.user_type 
     });
 
-    // TEMPORAL: Comentar la verificación de auth para debug
-    // if (!user || !isAsesor || !isHydrated) {
-    //   console.log('loadWorkflowData: Condiciones no cumplidas', { user: !!user, isAsesor, isHydrated });
-    //   return;
-    // }
-    
     if (!isHydrated) {
       console.log('loadWorkflowData: Esperando hidratación...');
       return;
+    }
+    
+    // Verificar auth pero solo logear, no bloquear (para debug)
+    if (!user || !isAsesor) {
+      console.log('⚠️ loadWorkflowData: Usuario no autenticado como asesor', { user: !!user, isAsesor, userType: user?.user_type });
+      // Continuar cargando datos para debug
     }
 
     console.log('loadWorkflowData: Iniciando carga...');
@@ -124,13 +124,13 @@ export default function AuthorizationWorkflowPage() {
 
   useEffect(() => {
     console.log('useEffect: Estado actual', { isHydrated, isAsesor, user: !!user, userType: user?.user_type });
-    if (isHydrated && isAsesor && user) {
-      console.log('useEffect: Llamando loadWorkflowData...');
+    if (isHydrated) {
+      console.log('useEffect: 🚀 Llamando loadWorkflowData (solo cuando se hidrata)...');
       loadWorkflowData();
     } else {
-      console.log('useEffect: No se cumplieron las condiciones para cargar datos');
+      console.log('useEffect: Esperando hidratación...');
     }
-  }, [isHydrated, isAsesor, user]); // Agregar dependencias necesarias
+  }, [isHydrated, loadWorkflowData]); // Incluir loadWorkflowData
 
   useEffect(() => {
     if (!isHydrated || workflows.length === 0) return;
