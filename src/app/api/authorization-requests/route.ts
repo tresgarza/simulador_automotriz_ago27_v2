@@ -202,3 +202,50 @@ export async function GET(request: NextRequest) {
     )
   }
 }
+
+// PUT - Actualizar solicitud de autorización existente
+export async function PUT(request: NextRequest) {
+  try {
+    const body = await request.json()
+    const { id, ...updateData } = body
+    
+    console.log('🔄 [UPDATE] Actualizando solicitud:', id, updateData)
+    
+    if (!id) {
+      return NextResponse.json(
+        { error: 'ID de solicitud requerido para actualización' },
+        { status: 400 }
+      )
+    }
+
+    // Actualizar solicitud de autorización
+    const { data: authRequest, error: authError } = await supabaseClient
+      .from('z_auto_authorization_requests')
+      .update(updateData)
+      .eq('id', id)
+      .select()
+      .single()
+
+    if (authError) {
+      console.error('❌ [ERROR] Error al actualizar solicitud de autorización:', authError)
+      return NextResponse.json(
+        { error: 'Error al actualizar la solicitud de autorización: ' + authError.message },
+        { status: 500 }
+      )
+    }
+
+    console.log('✅ [SUCCESS] Authorization request updated:', authRequest)
+
+    return NextResponse.json({
+      success: true,
+      authorization_request: authRequest
+    })
+
+  } catch (error) {
+    console.error('❌ [ERROR] Error en API de actualización de solicitudes:', error)
+    return NextResponse.json(
+      { error: 'Error interno del servidor: ' + (error as Error).message },
+      { status: 500 }
+    )
+  }
+}

@@ -341,14 +341,11 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
         form_data: data
       });
 
-      // Preparar datos para la API - manejar casos donde simulation puede ser null
-      const authorizationRequest = {
-        simulation_id: request.simulation?.id || null,
-        quote_id: request.simulation?.quote_id || null,
-        priority: 'medium',
+      // Preparar datos para actualizar la solicitud existente
+      const authorizationUpdate = {
+        id: request.id, // ID para la actualización
+        // Actualizar campos básicos
         client_name: data.applicant_name,
-        client_email: request.simulation?.quote?.client_email || request.client_email,
-        client_phone: request.simulation?.quote?.client_phone || request.client_phone,
         vehicle_brand: data.vehicle_brand,
         vehicle_model: data.vehicle_model,
         vehicle_year: data.vehicle_year,
@@ -358,12 +355,10 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
         term_months: data.term_months,
         agency_name: data.dealership,
         dealer_name: data.dealership,
-        promoter_code: request.simulation?.quote?.promoter_code || null,
         client_comments: data.comments,
-        risk_level: 'medium',
-        // Datos de competidores flexibles
-        competitors: data.competitors || [],
-        // Guardar todos los datos del formulario como JSONB
+        // Actualizar datos de competidores
+        competitors_data: data.competitors || [],
+        // Guardar/actualizar todos los datos del formulario como JSONB
         authorization_data: {
           // Datos del solicitante
           company: data.company,
@@ -405,20 +400,23 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
           average_expenses: averageExpenses,
           available_income: availableIncome,
           payment_capacity: paymentCapacity,
-          viability_ratio: viabilityRatio
+          viability_ratio: viabilityRatio,
+          
+          // Timestamp de actualización
+          updated_at: new Date().toISOString()
         }
       };
 
-      console.log('📦 Datos preparados para envío:', authorizationRequest);
+      console.log('📦 Datos preparados para actualización:', authorizationUpdate);
 
-      // Enviar a la API
-      console.log('🚀 Enviando a /api/authorization-requests...');
+      // Actualizar la solicitud existente
+      console.log('🔄 Actualizando solicitud existente con ID:', request.id);
       const response = await fetch('/api/authorization-requests', {
-        method: 'POST',
+        method: 'PUT',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify(authorizationRequest)
+        body: JSON.stringify(authorizationUpdate)
       });
 
       console.log('📡 Respuesta recibida:', response.status);
@@ -428,11 +426,11 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
 
       if (!response.ok) {
         console.error('❌ Error en la respuesta:', result);
-        throw new Error(result.error || 'Error al crear solicitud de autorización');
+        throw new Error(result.error || 'Error al actualizar solicitud de autorización');
       }
 
-      console.log('✅ Solicitud de autorización creada:', result.authorization_request);
-      alert('✅ Autorización enviada exitosamente! ID: ' + result.authorization_request?.id);
+      console.log('✅ Solicitud de autorización actualizada:', result.authorization_request);
+      alert('✅ Formulario de autorización guardado exitosamente!');
       
       // Cerrar el modal
       onClose();
