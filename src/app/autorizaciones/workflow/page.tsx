@@ -39,20 +39,39 @@ export default function AuthorizationWorkflowPage() {
   }, []);
 
   const loadWorkflowData = useCallback(async () => {
-    if (!user || !isAsesor || !isHydrated) return;
+    if (!user || !isAsesor || !isHydrated) {
+      console.log('loadWorkflowData: Condiciones no cumplidas', { user: !!user, isAsesor, isHydrated });
+      return;
+    }
 
+    console.log('loadWorkflowData: Iniciando carga...');
     setIsLoading(true);
     try {
       const { workflows: data, error } = await AuthorizationService.getAuthorizationWorkflowView();
 
+      console.log('loadWorkflowData: Respuesta recibida', { dataLength: data?.length, error });
+
       if (error) {
         console.error('Error loading workflow data:', error);
         setWorkflows([]);
+        setStats({
+          pending: 0,
+          claimed: 0,
+          under_advisor_review: 0,
+          advisor_approved: 0,
+          under_internal_committee: 0,
+          internal_committee_approved: 0,
+          under_partners_committee: 0,
+          approved: 0,
+          rejected: 0,
+          total: 0
+        });
       } else {
-        setWorkflows(data);
+        console.log('loadWorkflowData: Datos procesados', data);
+        setWorkflows(data || []);
         
         // Calcular estadísticas
-        const newStats = data.reduce((acc, workflow) => {
+        const newStats = (data || []).reduce((acc, workflow) => {
           acc[workflow.status] = (acc[workflow.status] || 0) + 1;
           acc.total += 1;
           return acc;
@@ -69,6 +88,7 @@ export default function AuthorizationWorkflowPage() {
           total: 0
         });
         
+        console.log('loadWorkflowData: Estadísticas calculadas', newStats);
         setStats(newStats);
       }
     } catch (error) {
