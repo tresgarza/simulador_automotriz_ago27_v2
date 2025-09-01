@@ -23,12 +23,23 @@ export const calculateFormProgress = (data: any): { percentage: number; complete
     'interest_rate', 'opening_fee', 'monthly_capacity', 'monthly_discount'
   ];
   
-  // Verificar campos de ingresos (arrays anidados)
-  const hasIncomeData = data.incomes && Array.isArray(data.incomes) && data.incomes.length >= 3;
+  // Verificar campos de ingresos (estructura simple mes1_, mes2_, mes3_)
+  const incomeFieldsCount = [
+    data.mes1_nomina, data.mes1_comisiones, data.mes1_negocio, data.mes1_efectivo,
+    data.mes2_nomina, data.mes2_comisiones, data.mes2_negocio, data.mes2_efectivo,
+    data.mes3_nomina, data.mes3_comisiones, data.mes3_negocio, data.mes3_efectivo
+  ].filter(value => value !== undefined && value !== null && value !== '' && value !== 0).length;
   
-  // Verificar campos de gastos (arrays anidados)  
-  const hasExpenseData = (data.commitments && Array.isArray(data.commitments) && data.commitments.length >= 3) ||
-                         (data.personal_expenses && Array.isArray(data.personal_expenses) && data.personal_expenses.length >= 3);
+  const hasIncomeData = incomeFieldsCount >= 3; // Al menos 3 campos de ingresos llenos
+  
+  // Verificar campos de gastos (estructura simple)
+  const expenseFieldsCount = [
+    data.mes1_compromisos, data.mes1_gastos_personales, data.mes1_gastos_negocio,
+    data.mes2_compromisos, data.mes2_gastos_personales, data.mes2_gastos_negocio,
+    data.mes3_compromisos, data.mes3_gastos_personales, data.mes3_gastos_negocio
+  ].filter(value => value !== undefined && value !== null && value !== '' && value !== 0).length;
+  
+  const hasExpenseData = expenseFieldsCount >= 3; // Al menos 3 campos de gastos llenos
   
   // Verificar datos del vehículo
   const vehicleFields = ['dealership', 'vehicle_brand', 'vehicle_model', 'vehicle_year', 'sale_value', 'book_value'];
@@ -251,34 +262,32 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
       book_value: request.authorization_data?.book_value || vehicleValueValue || 0,
       
       // Valores para ingresos (cargar desde authorization_data si existe)
-      mes1_nomina: request.authorization_data?.incomes?.[0]?.nomina || undefined,
-      mes1_comisiones: undefined,
-      mes1_negocio: undefined,
-      mes1_efectivo: undefined,
-      mes2_nomina: undefined,
-      mes2_comisiones: undefined,
-      mes2_negocio: undefined,
-      mes2_efectivo: undefined,
-      mes3_nomina: undefined,
-      mes3_comisiones: undefined,
-      mes3_negocio: undefined,
-      mes3_efectivo: undefined,
+      mes1_nomina: request.authorization_data?.mes1_nomina || undefined,
+      mes1_comisiones: request.authorization_data?.mes1_comisiones || undefined,
+      mes1_negocio: request.authorization_data?.mes1_negocio || undefined,
+      mes1_efectivo: request.authorization_data?.mes1_efectivo || undefined,
+      mes2_nomina: request.authorization_data?.mes2_nomina || undefined,
+      mes2_comisiones: request.authorization_data?.mes2_comisiones || undefined,
+      mes2_negocio: request.authorization_data?.mes2_negocio || undefined,
+      mes2_efectivo: request.authorization_data?.mes2_efectivo || undefined,
+      mes3_nomina: request.authorization_data?.mes3_nomina || undefined,
+      mes3_comisiones: request.authorization_data?.mes3_comisiones || undefined,
+      mes3_negocio: request.authorization_data?.mes3_negocio || undefined,
+      mes3_efectivo: request.authorization_data?.mes3_efectivo || undefined,
 
-      // Valores por defecto para gastos (estructura simple)
-      mes1_compromisos: undefined,
-      mes1_gastos_personales: undefined,
-      mes1_gastos_negocio: undefined,
-      mes2_compromisos: undefined,
-      mes2_gastos_personales: undefined,
-      mes2_gastos_negocio: undefined,
-      mes3_compromisos: undefined,
-      mes3_gastos_personales: undefined,
-      mes3_gastos_negocio: undefined,
-      commitments: 0,
-      personal_expenses: 0,
-      business_expenses: 0,
-      // Competidores flexibles - iniciar con 3 competidores por defecto
-      competitors: [
+      // Valores para gastos (cargar desde authorization_data si existe)
+      mes1_compromisos: request.authorization_data?.mes1_compromisos || undefined,
+      mes1_gastos_personales: request.authorization_data?.mes1_gastos_personales || undefined,
+      mes1_gastos_negocio: request.authorization_data?.mes1_gastos_negocio || undefined,
+      mes2_compromisos: request.authorization_data?.mes2_compromisos || undefined,
+      mes2_gastos_personales: request.authorization_data?.mes2_gastos_personales || undefined,
+      mes2_gastos_negocio: request.authorization_data?.mes2_gastos_negocio || undefined,
+      mes3_compromisos: request.authorization_data?.mes3_compromisos || undefined,
+      mes3_gastos_personales: request.authorization_data?.mes3_gastos_personales || undefined,
+      mes3_gastos_negocio: request.authorization_data?.mes3_gastos_negocio || undefined,
+      
+      // Competidores (cargar desde authorization_data si existe)
+      competitors: request.authorization_data?.competitors || [
         { name: "", price: 0 },
         { name: "", price: 0 },
         { name: "", price: 0 }
@@ -351,7 +360,16 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
       console.log('📤 Iniciando envío de autorización:', {
         request_id: request.id,
         has_simulation: !!request.simulation,
-        form_data: data
+        form_data: data,
+        form_keys: Object.keys(data),
+        form_values_sample: {
+          company: data.company,
+          applicant_name: data.applicant_name,
+          monthly_salary: data.monthly_salary,
+          mes1_nomina: data.mes1_nomina,
+          mes1_compromisos: data.mes1_compromisos,
+          competitors: data.competitors
+        }
       });
 
       // Preparar datos para actualizar la solicitud existente
@@ -389,7 +407,32 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
           monthly_discount: data.monthly_discount,
           comments: data.comments,
           
-          // Análisis financiero
+          // Ingresos mensuales (estructura simple)
+          mes1_nomina: data.mes1_nomina,
+          mes1_comisiones: data.mes1_comisiones,
+          mes1_negocio: data.mes1_negocio,
+          mes1_efectivo: data.mes1_efectivo,
+          mes2_nomina: data.mes2_nomina,
+          mes2_comisiones: data.mes2_comisiones,
+          mes2_negocio: data.mes2_negocio,
+          mes2_efectivo: data.mes2_efectivo,
+          mes3_nomina: data.mes3_nomina,
+          mes3_comisiones: data.mes3_comisiones,
+          mes3_negocio: data.mes3_negocio,
+          mes3_efectivo: data.mes3_efectivo,
+          
+          // Gastos mensuales (estructura simple)
+          mes1_compromisos: data.mes1_compromisos,
+          mes1_gastos_personales: data.mes1_gastos_personales,
+          mes1_gastos_negocio: data.mes1_gastos_negocio,
+          mes2_compromisos: data.mes2_compromisos,
+          mes2_gastos_personales: data.mes2_gastos_personales,
+          mes2_gastos_negocio: data.mes2_gastos_negocio,
+          mes3_compromisos: data.mes3_compromisos,
+          mes3_gastos_personales: data.mes3_gastos_personales,
+          mes3_gastos_negocio: data.mes3_gastos_negocio,
+          
+          // Análisis financiero (arrays y totales)
           incomes: data.incomes,
           commitments: data.commitments,
           personal_expenses: data.personal_expenses,
