@@ -361,79 +361,94 @@ export function PlansMatrix({
   const handleRequestAuthorization = async () => {
     setIsRequestingAuthorization(true);
     try {
-      // Si no tenemos IDs de simulación guardados, crear una solicitud básica
-      if (!selectedSimulationId || !currentQuoteId) {
-        console.warn('⚠️ No hay IDs de simulación/cotización guardados. Creando solicitud básica...');
-        
-        // Crear una solicitud básica con los datos disponibles
-        const basicAuthRequest = {
-          // Usar datos temporales si no hay IDs guardados
-          simulation_id: null, // Se puede crear sin simulation_id
-          quote_id: null, // Se puede crear sin quote_id
-          priority: 'high', // Alta prioridad porque no tiene simulación guardada
-          client_comments: `Solicitud de autorización para ${selectedTier}-${selectedTerm} meses. Datos del vehículo: ${vehicleBrand} ${vehicleModel} ${vehicleYear}. Valor: $${vehicleValue?.toLocaleString()}`,
-          risk_level: 'medium',
-          created_by_user_id: user?.id,
-          // Agregar datos básicos disponibles
-          client_name: clientName || 'Cliente no especificado',
-          client_email: clientEmail,
-          client_phone: clientPhone,
-          vehicle_brand: vehicleBrand,
-          vehicle_model: vehicleModel,
-          vehicle_year: vehicleYear,
-          vehicle_value: vehicleValue,
-          requested_amount: currentResult?.summary?.principal_total || vehicleValue,
-          monthly_payment: currentResult?.summary?.pmt_base,
-          term_months: selectedTerm,
-          agency_name: dealerAgency || vendorName,
-          dealer_name: vendorName,
-          internal_notes: 'Solicitud creada sin simulación guardada - requiere revisión manual'
-        };
-
-        const response = await fetch('/api/authorization-requests', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(basicAuthRequest)
+      console.log('🔍 IDs disponibles:', { selectedSimulationId, currentQuoteId });
+      
+      // Intentar encontrar los IDs correctos basados en la selección actual
+      let finalSimulationId = selectedSimulationId;
+      let finalQuoteId = currentQuoteId;
+      
+      // Si no tenemos IDs, intentar buscarlos en base al cliente y selección
+      if (!finalSimulationId || !finalQuoteId) {
+        console.log('🔍 Buscando IDs de simulación para:', { 
+          clientName, 
+          selectedTier, 
+          selectedTerm, 
+          vehicleBrand, 
+          vehicleModel 
         });
-
-        const result = await response.json();
-
-        if (!response.ok) {
-          throw new Error(result.error || 'Error al crear solicitud de autorización');
-        }
-
-        console.log('✅ Solicitud de autorización básica creada:', result.authorization_request);
-        setIsAuthorizationSent(true);
-        // alert('¡Solicitud de autorización enviada exitosamente! Será revisada por un asesor.\n\nNota: Se creó una solicitud básica debido a problemas técnicos con el guardado de simulaciones.');
         
+        // Buscar la simulación más reciente que coincida
+        try {
+          const searchResponse = await fetch(`/api/simulations/find?client_name=${encodeURIComponent(clientName || '')}&tier=${selectedTier}&term=${selectedTerm}&vehicle_brand=${encodeURIComponent(vehicleBrand || '')}`);
+          
+          if (searchResponse.ok) {
+            const searchResult = await searchResponse.json();
+            if (searchResult.simulation_id) {
+              finalSimulationId = searchResult.simulation_id;
+              finalQuoteId = searchResult.quote_id;
+              console.log('✅ IDs encontrados via API:', { finalSimulationId, finalQuoteId });
+            }
+          }
+        } catch (error) {
+          console.warn('⚠️ Error buscando IDs:', error);
+        }
+      }
+      
+      // Crear solicitud con IDs reales o básica como fallback
+      const authRequest = {
+        simulation_id: finalSimulationId,
+        quote_id: finalQuoteId,
+        priority: finalSimulationId ? 'medium' : 'high', // Alta prioridad si no hay simulación
+        client_comments: `Solicitud de autorización para ${selectedTier}-${selectedTerm} meses. Datos del vehículo: ${vehicleBrand} ${vehicleModel} ${vehicleYear}. Valor: $${vehicleValue?.toLocaleString()}`,
+        risk_level: 'medium',
+        created_by_user_id: user?.id,
+        // Datos básicos disponibles
+        client_name: clientName || 'Cliente no especificado',
+        client_email: clientEmail,
+        client_phone: clientPhone,
+        vehicle_brand: vehicleBrand,
+        vehicle_model: vehicleModel,
+        vehicle_year: vehicleYear,
+        vehicle_value: vehicleValue,
+        requested_amount: currentResult?.summary?.principal_total || vehicleValue,
+        monthly_payment: currentResult?.summary?.pmt_total_month2 || 0,
+        term_months: selectedTerm,
+        agency_name: dealerAgency || vendorName,
+        dealer_name: vendorName,
+        internal_notes: finalSimulationId 
+          ? `Solicitud conectada a simulación ${finalSimulationId}`
+          : 'Solicitud creada sin simulación guardada - requiere revisión manual'
+      };
+
+      console.log('📤 Enviando solicitud con datos:', authRequest);
+
+      const response = await fetch('/api/authorization-requests', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(authRequest)
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        throw new Error(result.error || 'Error al crear solicitud de autorización');
+      }
+
+      console.log('✅ Solicitud de autorización creada:', result.authorization_request);
+      setIsAuthorizationSent(true);
+      
+      if (finalSimulationId) {
+        alert(`✅ Solicitud de autorización enviada exitosamente!
+        
+ID: ${result.authorization_request?.id}
+Simulación: ${finalSimulationId}
+Cotización: ${finalQuoteId}
+        
+Será revisada por un asesor.`);
       } else {
-        // Flujo normal con IDs de simulación
-        const response = await fetch('/api/authorization-requests', {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            simulation_id: selectedSimulationId,
-            quote_id: currentQuoteId,
-            priority: 'medium',
-            client_comments: `Solicitud generada desde simulación ${selectedTier}-${selectedTerm} meses`,
-            risk_level: 'medium',
-            created_by_user_id: user?.id
-          })
-        });
-
-        const result = await response.json();
-
-        if (!response.ok) {
-          throw new Error(result.error || 'Error al crear solicitud de autorización');
-        }
-
-        console.log('✅ Solicitud de autorización completa creada:', result.authorization_request);
-        setIsAuthorizationSent(true);
-        // alert('¡Solicitud de autorización enviada exitosamente! Será revisada por un asesor.');
+        alert('✅ Solicitud de autorización enviada exitosamente! Será revisada por un asesor.');
       }
       
     } catch (error) {
