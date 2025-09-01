@@ -77,9 +77,15 @@ export default function AuthorizationWorkflowPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [user, isAsesor, isHydrated]);
+  }, []); // Remover dependencias para evitar loop infinito
 
-  const filterWorkflows = useCallback(() => {
+  useEffect(() => {
+    if (isHydrated && isAsesor && user) {
+      loadWorkflowData();
+    }
+  }, [isHydrated]); // Solo cargar una vez cuando se hidrata
+
+  useEffect(() => {
     if (!isHydrated || workflows.length === 0) return;
 
     let filtered = workflows;
@@ -113,19 +119,7 @@ export default function AuthorizationWorkflowPage() {
     }
 
     setFilteredWorkflows(filtered);
-  }, [workflows, searchTerm, statusFilter, assigneeFilter, isHydrated, user?.id]);
-
-  useEffect(() => {
-    if (isHydrated) {
-      if (isAsesor && user) {
-        loadWorkflowData();
-      }
-    }
-  }, [isAsesor, user, isHydrated, loadWorkflowData]);
-
-  useEffect(() => {
-    filterWorkflows();
-  }, [filterWorkflows]);
+  }, [workflows, searchTerm, statusFilter, assigneeFilter, isHydrated, user?.id]); // Dependencias específicas sin callbacks
 
   // Show loading during hydration
   if (!isHydrated) {
