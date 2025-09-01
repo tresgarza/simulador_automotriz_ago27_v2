@@ -6,7 +6,7 @@ import { useAuth } from "../../../lib/auth";
 import { SimulationService, SimulationWithQuote } from "../../../lib/simulation-service";
 import { AuthorizationService } from "../../../lib/authorization-service";
 import { formatMXN } from "@/lib/utils";
-import { AuthorizationForm } from "../../components/authorization/AuthorizationForm";
+import { AuthorizationForm, calculateFormProgress } from "../../components/authorization/AuthorizationForm";
 
 interface AuthorizationRequest {
   id: string;
@@ -240,6 +240,30 @@ export default function AutorizacionesPage() {
   const handleLogout = () => {
     logout();
     window.location.href = '/'; // Redirigir al inicio
+  };
+
+  const handleSendToInternalCommittee = async (requestId: string) => {
+    if (!confirm('¿Está seguro de enviar esta solicitud al Comité Interno? Una vez enviada, no podrá modificar el formulario.')) return;
+    
+    try {
+      await AuthorizationService.approveByInternalCommittee(requestId);
+      loadAuthorizationRequests(); // Recargar datos
+      alert('Solicitud enviada al Comité Interno exitosamente');
+    } catch (error) {
+      console.error('Error al enviar a comité interno:', error);
+      alert('Error al enviar la solicitud al comité interno');
+    }
+  };
+
+  const handleDownloadPDF = async (request: AuthorizationRequest) => {
+    try {
+      // TODO: Implementar generación de PDF profesional
+      alert('Funcionalidad de PDF en desarrollo. Se generará un reporte profesional con toda la información de la autorización.');
+      console.log('Datos para PDF:', request);
+    } catch (error) {
+      console.error('Error al generar PDF:', error);
+      alert('Error al generar el PDF');
+    }
   };
 
   const getStatusColor = (status: string) => {
@@ -700,24 +724,87 @@ export default function AutorizacionesPage() {
                     <div className="bg-gray-50 rounded-lg p-3">
                       <div className="flex items-center mb-2">
                         <UserCheck className="w-4 h-4 text-gray-500 mr-2" />
-                        <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">Asesor</span>
+                        <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">Estado del Asesor</span>
                       </div>
-                      <p className="text-sm font-medium text-gray-900">
-                        {request.reviewerName || 'Sin asignar'}
-                      </p>
+                      {request.status === 'pending' ? (
+                        <p className="text-sm font-medium text-gray-500">Sin asignar</p>
+                      ) : request.status === 'in_review' ? (
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">
+                            {request.reviewerName || 'Asesor asignado'}
+                          </p>
+                          <p className="text-xs text-emerald-600 font-medium">Reclamado por este asesor</p>
+                        </div>
+                      ) : (
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">
+                            {request.reviewerName || 'Procesado'}
+                          </p>
+                          <p className="text-xs text-gray-500">
+                            {request.status === 'approved' ? 'Aprobado' : 
+                             request.status === 'rejected' ? 'Rechazado' : 
+                             request.status === 'cancelled' ? 'Cancelado' : 'Procesado'}
+                          </p>
+                        </div>
+                      )}
                     </div>
                   </div>
 
+                  {/* Form Progress - Solo para solicitudes en revisión */}
+                  {request.status === 'in_review' && request.reviewerId === user?.id && (
+                    <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-medium text-blue-900">Progreso del Formulario</span>
+                        <span className="text-xs text-blue-700">
+                          {request.authorization_data ? 
+                            `${calculateFormProgress(request.authorization_data).percentage}% completado` : 
+                            '0% completado'}
+                        </span>
+                      </div>
+                      <div className="w-full bg-blue-200 rounded-full h-2">
+                        <div 
+                          className="bg-blue-600 h-2 rounded-full transition-all duration-300" 
+                          style={{ 
+                            width: `${request.authorization_data ? 
+                              calculateFormProgress(request.authorization_data).percentage : 0}%` 
+                          }}
+                        ></div>
+                      </div>
+                      {request.authorization_data && calculateFormProgress(request.authorization_data).isComplete ? (
+                        <div className="mt-2 flex items-center text-sm text-green-700">
+                          <CheckCircle className="w-4 h-4 mr-1" />
+                          Formulario completado - Listo para enviar a comité interno
+                        </div>
+                      ) : (
+                        <div className="mt-2 text-sm text-blue-700">
+                          Complete el formulario para poder enviar a revisión interna
+                        </div>
+                      )}
+                    </div>
+                  )}
+
                   {/* Actions */}
                   <div className="flex gap-2 flex-wrap">
-                    {/* Revisar */}
-                    <button
-                      onClick={() => handleAuthorizeRequest(request)}
-                      className="inline-flex items-center px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-700 transition-colors"
-                    >
-                      <Eye className="w-4 h-4 mr-2" />
-                      Revisar
-                    </button>
+                    {/* Revisar - Solo si no está asignado o está asignado al usuario actual */}
+                    {(request.status === 'pending' || 
+                      (request.status === 'in_review' && request.reviewerId === user?.id) ||
+                      (request.status !== 'pending' && request.status !== 'in_review')) && (
+                      <button
+                        onClick={() => handleAuthorizeRequest(request)}
+                        className="inline-flex items-center px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-700 transition-colors"
+                      >
+                        <Eye className="w-4 h-4 mr-2" />
+                        Revisar
+                      </button>
+                    )}
+
+                    {/* Mensaje si está asignado a otro asesor */}
+                    {request.status === 'in_review' && request.reviewerId !== user?.id && (
+                      <div className="inline-flex items-center px-4 py-2 bg-orange-100 text-orange-800 text-sm font-medium rounded-lg">
+                        <AlertTriangle className="w-4 h-4 mr-2" />
+                        Asignado a {request.reviewerName}
+                      </div>
+                    )}
 
                     {/* Reclamar (solo para pendientes) */}
                     {request.status === 'pending' && (
@@ -730,19 +817,47 @@ export default function AutorizacionesPage() {
                       </button>
                     )}
 
-                    {/* Aprobar como Asesor (solo para reclamadas) */}
-                    {request.status === 'in_review' && (
+                    {/* Aprobar como Asesor (solo para reclamadas por el usuario actual) */}
+                    {request.status === 'in_review' && request.reviewerId === user?.id && (
                       <button
                         onClick={() => handleApproveAsAdvisor(request.id)}
                         className="inline-flex items-center px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors"
                       >
                         <CheckCircle className="w-4 h-4 mr-2" />
-                        Aprobar
+                        Aprobar como Asesor
                       </button>
                     )}
 
-                    {/* Rechazar */}
-                    {(request.status === 'pending' || request.status === 'in_review') && (
+                    {/* Enviar a Comité Interno - Solo si el formulario está completo */}
+                    {request.status === 'in_review' && 
+                     request.reviewerId === user?.id && 
+                     request.authorization_data && 
+                     calculateFormProgress(request.authorization_data).isComplete && (
+                      <button
+                        onClick={() => handleSendToInternalCommittee(request.id)}
+                        className="inline-flex items-center px-4 py-2 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700 transition-colors"
+                      >
+                        <Building2 className="w-4 h-4 mr-2" />
+                        Enviar a Comité Interno
+                      </button>
+                    )}
+
+                    {/* Descargar PDF - Solo si hay datos del formulario */}
+                    {request.status === 'in_review' && 
+                     request.reviewerId === user?.id && 
+                     request.authorization_data && (
+                      <button
+                        onClick={() => handleDownloadPDF(request)}
+                        className="inline-flex items-center px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors"
+                      >
+                        <FileCheck className="w-4 h-4 mr-2" />
+                        Descargar PDF
+                      </button>
+                    )}
+
+                    {/* Rechazar - Solo el asesor asignado o solicitudes pendientes */}
+                    {(request.status === 'pending' || 
+                      (request.status === 'in_review' && request.reviewerId === user?.id)) && (
                       <button
                         onClick={() => handleRejectRequest(request.id)}
                         className="inline-flex items-center px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 transition-colors"
@@ -752,8 +867,9 @@ export default function AutorizacionesPage() {
                       </button>
                     )}
 
-                    {/* Descartar */}
-                    {(request.status === 'pending' || request.status === 'in_review') && (
+                    {/* Descartar - Solo el asesor asignado o solicitudes pendientes */}
+                    {(request.status === 'pending' || 
+                      (request.status === 'in_review' && request.reviewerId === user?.id)) && (
                       <button
                         onClick={() => handleDiscardRequest(request.id)}
                         className="inline-flex items-center px-4 py-2 bg-gray-600 text-white text-sm font-medium rounded-lg hover:bg-gray-700 transition-colors"
