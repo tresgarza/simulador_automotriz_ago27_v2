@@ -266,24 +266,30 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
   const onSubmit = async (data: AuthorizationFormData) => {
     setIsSubmitting(true);
     try {
-      // Preparar datos para la API
+      console.log('📤 Iniciando envío de autorización:', {
+        request_id: request.id,
+        has_simulation: !!request.simulation,
+        form_data: data
+      });
+
+      // Preparar datos para la API - manejar casos donde simulation puede ser null
       const authorizationRequest = {
-        simulation_id: request.simulation.id,
-        quote_id: request.simulation.quote_id,
+        simulation_id: request.simulation?.id || null,
+        quote_id: request.simulation?.quote_id || null,
         priority: 'medium',
         client_name: data.applicant_name,
-        client_email: request.simulation?.quote?.client_email,
-        client_phone: request.simulation?.quote?.client_phone,
+        client_email: request.simulation?.quote?.client_email || request.client_email,
+        client_phone: request.simulation?.quote?.client_phone || request.client_phone,
         vehicle_brand: data.vehicle_brand,
         vehicle_model: data.vehicle_model,
         vehicle_year: data.vehicle_year,
         vehicle_value: data.sale_value,
         requested_amount: data.requested_amount,
-        monthly_payment: request.simulation.monthly_payment,
+        monthly_payment: request.simulation?.monthly_payment || monthlyPaymentValue,
         term_months: data.term_months,
         agency_name: data.dealership,
         dealer_name: data.dealership,
-        promoter_code: request.simulation?.quote?.promoter_code,
+        promoter_code: request.simulation?.quote?.promoter_code || null,
         client_comments: data.comments,
         risk_level: 'medium',
         // Datos de competidores flexibles
@@ -334,7 +340,10 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
         }
       };
 
+      console.log('📦 Datos preparados para envío:', authorizationRequest);
+
       // Enviar a la API
+      console.log('🚀 Enviando a /api/authorization-requests...');
       const response = await fetch('/api/authorization-requests', {
         method: 'POST',
         headers: {
@@ -343,20 +352,24 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
         body: JSON.stringify(authorizationRequest)
       });
 
+      console.log('📡 Respuesta recibida:', response.status);
+
       const result = await response.json();
+      console.log('📋 Contenido de respuesta:', result);
 
       if (!response.ok) {
+        console.error('❌ Error en la respuesta:', result);
         throw new Error(result.error || 'Error al crear solicitud de autorización');
       }
 
-      console.log('Solicitud de autorización creada:', result.authorization_request);
+      console.log('✅ Solicitud de autorización creada:', result.authorization_request);
+      alert('✅ Autorización enviada exitosamente! ID: ' + result.authorization_request?.id);
       
       // Cerrar el modal
       onClose();
     } catch (error) {
-      console.error("Error submitting authorization:", error);
-      // Aquí podrías mostrar un toast o mensaje de error al usuario
-      alert('Error al crear la solicitud de autorización: ' + (error as Error).message);
+      console.error("💥 Error submitting authorization:", error);
+      alert('❌ Error al enviar la autorización: ' + (error as Error).message);
     } finally {
       setIsSubmitting(false);
     }
