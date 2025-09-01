@@ -220,8 +220,19 @@ export default function AutorizacionesPage() {
   // Funciones de workflow
   const handleClaimRequest = async (requestId: string) => {
     try {
-      await AuthorizationService.claimAuthorizationRequest(requestId);
-      loadAuthorizationRequests(); // Recargar datos
+      if (!user?.id) {
+        alert('Error: Usuario no autenticado');
+        return;
+      }
+      
+      const result = await AuthorizationService.claimAuthorizationRequest(requestId, user.id);
+      
+      if (result.success) {
+        loadAuthorizationRequests(); // Recargar datos
+        alert('✅ Solicitud reclamada exitosamente');
+      } else {
+        alert('Error al reclamar la solicitud: ' + result.error);
+      }
     } catch (error) {
       console.error('Error al reclamar solicitud:', error);
       alert('Error al reclamar la solicitud');
@@ -230,8 +241,19 @@ export default function AutorizacionesPage() {
 
   const handleApproveAsAdvisor = async (requestId: string) => {
     try {
-      await AuthorizationService.markAdvisorReviewed(requestId);
-      loadAuthorizationRequests(); // Recargar datos
+      if (!user?.id) {
+        alert('Error: Usuario no autenticado');
+        return;
+      }
+      
+      const result = await AuthorizationService.markAdvisorReviewed(requestId, user.id, 'Aprobado por asesor desde el sistema');
+      
+      if (result.success) {
+        loadAuthorizationRequests(); // Recargar datos
+        alert('✅ Solicitud aprobada como asesor exitosamente');
+      } else {
+        alert('Error al aprobar como asesor: ' + result.error);
+      }
     } catch (error) {
       console.error('Error al aprobar como asesor:', error);
       alert('Error al aprobar como asesor');
@@ -243,8 +265,19 @@ export default function AutorizacionesPage() {
     if (!reason) return;
     
     try {
-      await AuthorizationService.rejectAuthorizationRequest(requestId, reason);
-      loadAuthorizationRequests(); // Recargar datos
+      if (!user?.id) {
+        alert('Error: Usuario no autenticado');
+        return;
+      }
+      
+      const result = await AuthorizationService.rejectAuthorizationRequest(requestId, user.id, reason);
+      
+      if (result.success) {
+        loadAuthorizationRequests(); // Recargar datos
+        alert('✅ Solicitud rechazada exitosamente');
+      } else {
+        alert('Error al rechazar la solicitud: ' + result.error);
+      }
     } catch (error) {
       console.error('Error al rechazar solicitud:', error);
       alert('Error al rechazar la solicitud');
@@ -255,9 +288,19 @@ export default function AutorizacionesPage() {
     if (!confirm('¿Estás seguro de que deseas descartar esta solicitud?')) return;
     
     try {
-      // Usar el endpoint de reject pero con estado cancelled
-      await AuthorizationService.rejectAuthorizationRequest(requestId, 'Solicitud descartada por el asesor');
-      loadAuthorizationRequests(); // Recargar datos
+      if (!user?.id) {
+        alert('Error: Usuario no autenticado');
+        return;
+      }
+      
+      const result = await AuthorizationService.rejectAuthorizationRequest(requestId, user.id, 'Solicitud descartada por el asesor');
+      
+      if (result.success) {
+        loadAuthorizationRequests(); // Recargar datos
+        alert('✅ Solicitud descartada exitosamente');
+      } else {
+        alert('Error al descartar la solicitud: ' + result.error);
+      }
     } catch (error) {
       console.error('Error al descartar solicitud:', error);
       alert('Error al descartar la solicitud');
@@ -273,9 +316,19 @@ export default function AutorizacionesPage() {
     if (!confirm('¿Está seguro de enviar esta solicitud al Comité Interno? Una vez enviada, no podrá modificar el formulario.')) return;
     
     try {
-      await AuthorizationService.approveByInternalCommittee(requestId);
-      loadAuthorizationRequests(); // Recargar datos
-      alert('Solicitud enviada al Comité Interno exitosamente');
+      if (!user?.id) {
+        alert('Error: Usuario no autenticado');
+        return;
+      }
+      
+      const result = await AuthorizationService.approveByInternalCommittee(requestId, user.id, 'Enviado a comité interno desde el sistema');
+      
+      if (result.success) {
+        loadAuthorizationRequests(); // Recargar datos
+        alert('✅ Solicitud enviada al Comité Interno exitosamente');
+      } else {
+        alert('Error al enviar al comité interno: ' + result.error);
+      }
     } catch (error) {
       console.error('Error al enviar a comité interno:', error);
       alert('Error al enviar la solicitud al comité interno');
