@@ -18,6 +18,16 @@ export default function AuthorizationWorkflowPage() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [assigneeFilter, setAssigneeFilter] = useState<string>('all');
   const [isHydrated, setIsHydrated] = useState(false);
+
+  // Debug logging
+  console.log('AuthorizationWorkflowPage: Renderizado', { 
+    user: !!user, 
+    userType: user?.user_type,
+    isAsesor, 
+    isHydrated,
+    workflowsLength: workflows.length,
+    isLoading 
+  });
   
   // Estadísticas del workflow
   const [stats, setStats] = useState({
@@ -100,10 +110,14 @@ export default function AuthorizationWorkflowPage() {
   }, []); // Remover dependencias para evitar loop infinito
 
   useEffect(() => {
+    console.log('useEffect: Estado actual', { isHydrated, isAsesor, user: !!user, userType: user?.user_type });
     if (isHydrated && isAsesor && user) {
+      console.log('useEffect: Llamando loadWorkflowData...');
       loadWorkflowData();
+    } else {
+      console.log('useEffect: No se cumplieron las condiciones para cargar datos');
     }
-  }, [isHydrated]); // Solo cargar una vez cuando se hidrata
+  }, [isHydrated, isAsesor, user]); // Agregar dependencias necesarias
 
   useEffect(() => {
     if (!isHydrated || workflows.length === 0) return;
