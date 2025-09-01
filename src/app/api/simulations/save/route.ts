@@ -69,7 +69,7 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Validar que financedAmount sea razonable (no más del 70% del valor del vehículo)
+    // Validar que financedAmount sea razonable (no más del 85% del valor del vehículo)
     if (financedAmount && financedAmount > 0) {
       const { data: quote } = await supabaseClient
         .from('z_auto_quotes')
@@ -78,10 +78,10 @@ export async function POST(request: NextRequest) {
         .single();
 
       if (quote) {
-        const maxFinanced = quote.vehicle_value * 0.7;
+        const maxFinanced = quote.vehicle_value * 0.85; // Aumentado de 70% a 85%
         if (financedAmount > maxFinanced) {
           return NextResponse.json(
-            { error: `El monto financiado no puede exceder el 70% del valor del vehículo (máximo: ${maxFinanced.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })})` },
+            { error: `El monto financiado no puede exceder el 85% del valor del vehículo (máximo: ${maxFinanced.toLocaleString('es-MX', { style: 'currency', currency: 'MXN' })})` },
             { status: 400 }
           )
         }
