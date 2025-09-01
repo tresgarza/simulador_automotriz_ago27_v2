@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { FileCheck, Users, Search, Filter, Eye, CheckCircle, XCircle, Clock, ChevronRight, Grid, List, Trash2, UserCheck, AlertTriangle, Calendar, User } from "lucide-react";
+import { FileCheck, Users, Search, Filter, Eye, CheckCircle, XCircle, Clock, ChevronRight, Grid, List, Trash2, UserCheck, AlertTriangle, Calendar, User, Home, LogOut } from "lucide-react";
+import Link from "next/link";
 import { useAuth } from "../../../lib/auth";
 import { SimulationService, SimulationWithQuote } from "../../../lib/simulation-service";
 import { AuthorizationService } from "../../../lib/authorization-service";
@@ -31,7 +32,7 @@ interface AuthorizationRequest {
 }
 
 export default function AutorizacionesPage() {
-  const { user, isAsesor } = useAuth();
+  const { user, isAsesor, logout } = useAuth();
   const [requests, setRequests] = useState<AuthorizationRequest[]>([]);
   const [filteredRequests, setFilteredRequests] = useState<AuthorizationRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -236,6 +237,11 @@ export default function AutorizacionesPage() {
     }
   };
 
+  const handleLogout = () => {
+    logout();
+    window.location.href = '/'; // Redirigir al inicio
+  };
+
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'pending': return 'bg-yellow-100 text-yellow-800';
@@ -313,13 +319,43 @@ export default function AutorizacionesPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-white">
       <div className="max-w-7xl mx-auto p-6">
-        {/* Header */}
+                {/* Header */}
         <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2 flex items-center">
-            <FileCheck className="w-8 h-8 mr-3 text-emerald-600" />
+          <div className="flex justify-between items-start">
+            <div>
+              <h1 className="text-3xl font-bold text-gray-900 mb-2 flex items-center">
+                <FileCheck className="w-8 h-8 mr-3 text-emerald-600" />
                 Sistema de Autorizaciones
               </h1>
-          <p className="text-gray-600">Gestión de solicitudes de crédito automotriz</p>
+              <p className="text-gray-600">Gestión de solicitudes de crédito automotriz</p>
+              {user && (
+                <div className="mt-2 flex items-center text-sm text-gray-500">
+                  <User className="w-4 h-4 mr-2" />
+                  <span>Conectado como: <strong className="text-gray-700">{user.name}</strong> ({user.user_type === 'asesor' ? 'Asesor' : 'Usuario'})</span>
+                </div>
+              )}
+            </div>
+            
+            {/* Navigation Buttons */}
+            <div className="flex gap-3">
+              <Link href="/">
+                <button className="inline-flex items-center px-4 py-2 bg-white border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors shadow-sm">
+                  <Home className="w-4 h-4 mr-2" />
+                  Inicio
+                </button>
+              </Link>
+              
+              {user && (
+                <button 
+                  onClick={handleLogout}
+                  className="inline-flex items-center px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors shadow-sm"
+                >
+                  <LogOut className="w-4 h-4 mr-2" />
+                  Cerrar Sesión
+                </button>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* Stats Cards */}
