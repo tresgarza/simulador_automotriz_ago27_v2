@@ -7,6 +7,7 @@ import { SimulationService, SimulationWithQuote } from "../../../lib/simulation-
 import { AuthorizationService } from "../../../lib/authorization-service";
 import { formatMXN } from "@/lib/utils";
 import { AuthorizationForm, calculateFormProgress } from "../../components/authorization/AuthorizationForm";
+import { generateAuthorizationPDF, PDFAuthorizationData } from "../../lib/pdf-generator";
 
 interface AuthorizationRequest {
   id: string;
@@ -283,12 +284,46 @@ export default function AutorizacionesPage() {
 
   const handleDownloadPDF = async (request: AuthorizationRequest) => {
     try {
-      // TODO: Implementar generación de PDF profesional
-      alert('Funcionalidad de PDF en desarrollo. Se generará un reporte profesional con toda la información de la autorización.');
-      console.log('Datos para PDF:', request);
+      console.log('📄 Generando PDF para request:', request.id);
+      
+      // Preparar datos para el PDF
+      const pdfData: PDFAuthorizationData = {
+        id: request.id,
+        client_name: request.simulation?.quote?.client_name || request.client_name || 'Cliente no especificado',
+        client_email: request.simulation?.quote?.client_email || request.client_email,
+        client_phone: request.simulation?.quote?.client_phone || request.client_phone,
+        status: request.status,
+        created_at: request.createdAt,
+        
+        // Información del vehículo
+        vehicle_brand: request.simulation?.quote?.vehicle_brand || request.vehicle_brand,
+        vehicle_model: request.simulation?.quote?.vehicle_model || request.vehicle_model,
+        vehicle_year: request.simulation?.quote?.vehicle_year || request.vehicle_year,
+        vehicle_value: request.simulation?.quote?.vehicle_value || request.vehicle_value,
+        
+        // Información financiera
+        monthly_payment: request.simulation?.pmt_total_month2 || request.simulation?.monthly_payment || request.monthly_payment,
+        requested_amount: request.requested_amount,
+        term_months: request.simulation?.term_months || request.term_months,
+        
+        // Información del asesor
+        reviewer_name: request.reviewerName,
+        agency_name: request.simulation?.quote?.agency_name || 'No especificada',
+        
+        // Datos del formulario
+        authorization_data: request.authorization_data
+      };
+      
+      console.log('📄 Datos preparados para PDF:', pdfData);
+      
+      // Generar y descargar PDF
+      generateAuthorizationPDF(pdfData);
+      
+      console.log('✅ PDF generado exitosamente');
+      
     } catch (error) {
-      console.error('Error al generar PDF:', error);
-      alert('Error al generar el PDF');
+      console.error('❌ Error al generar PDF:', error);
+      alert('Error al generar el PDF: ' + (error as Error).message);
     }
   };
 
