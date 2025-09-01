@@ -95,12 +95,6 @@ export function UserMenu() {
                       <span>Sistema de Autorizaciones</span>
                     </button>
                   </Link>
-                  <Link href="/autorizaciones/workflow" onClick={() => setIsOpen(false)}>
-                    <button className="w-full flex items-center space-x-3 px-3 py-2 text-gray-700 hover:bg-gray-50 rounded-xl transition-colors">
-                      <Users className="w-4 h-4" />
-                      <span>Workflow de Autorizaciones</span>
-                    </button>
-                  </Link>
                   <Link href="#" onClick={() => setIsOpen(false)}>
                     <button className="w-full flex items-center space-x-3 px-3 py-2 text-gray-700 hover:bg-gray-50 rounded-xl transition-colors">
                       <BarChart3 className="w-4 h-4" />
