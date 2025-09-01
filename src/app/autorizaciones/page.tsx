@@ -137,11 +137,7 @@ export default function AutorizacionesPage() {
         vehicle_brand: authReq.vehicle_brand,
         vehicle_model: authReq.vehicle_model,
         vehicle_year: authReq.vehicle_year,
-        vehicle_value: authReq.vehicle_value,
-        // ✅ AGREGADO: Campos financieros que faltaban
-        monthly_payment: authReq.monthly_payment,
-        requested_amount: authReq.requested_amount,
-        term_months: authReq.term_months
+        vehicle_value: authReq.vehicle_value
       }));
 
       setRequests(authorizationRequests);
@@ -178,14 +174,6 @@ export default function AutorizacionesPage() {
   }, [filterRequests, isHydrated]);
 
   const handleAuthorizeRequest = (request: AuthorizationRequest) => {
-    console.log('🎯 Opening authorization form for request:', {
-      id: request.id,
-      client_name: request.client_name,
-      monthly_payment: request.monthly_payment,
-      monthly_payment_type: typeof request.monthly_payment,
-      vehicle_value: request.vehicle_value,
-      full_request: request
-    });
     setSelectedRequest(request);
     setShowAuthorizationForm(true);
   };

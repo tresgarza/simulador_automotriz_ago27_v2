@@ -49,8 +49,21 @@ export default function AuthorizationWorkflowPage() {
   }, []);
 
   const loadWorkflowData = useCallback(async () => {
-    if (!user || !isAsesor || !isHydrated) {
-      console.log('loadWorkflowData: Condiciones no cumplidas', { user: !!user, isAsesor, isHydrated });
+    console.log('loadWorkflowData: 🧪 DEBUG - Verificando condiciones...', { 
+      user: !!user, 
+      isAsesor, 
+      isHydrated,
+      userType: user?.user_type 
+    });
+
+    // TEMPORAL: Comentar la verificación de auth para debug
+    // if (!user || !isAsesor || !isHydrated) {
+    //   console.log('loadWorkflowData: Condiciones no cumplidas', { user: !!user, isAsesor, isHydrated });
+    //   return;
+    // }
+    
+    if (!isHydrated) {
+      console.log('loadWorkflowData: Esperando hidratación...');
       return;
     }
 
