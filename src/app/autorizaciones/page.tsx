@@ -37,7 +37,7 @@ export default function AutorizacionesPage() {
   const [filteredRequests, setFilteredRequests] = useState<AuthorizationRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'in_review' | 'approved' | 'rejected' | 'cancelled'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'in_review' | 'advisor_approved' | 'internal_committee' | 'partners_committee' | 'approved' | 'rejected' | 'cancelled'>('all');
   const [selectedRequest, setSelectedRequest] = useState<AuthorizationRequest | null>(null);
   const [showAuthorizationForm, setShowAuthorizationForm] = useState(false);
   const [isHydrated, setIsHydrated] = useState(false);
@@ -270,6 +270,9 @@ export default function AutorizacionesPage() {
     switch (status) {
       case 'pending': return 'bg-yellow-100 text-yellow-800';
       case 'in_review': return 'bg-blue-100 text-blue-800';
+      case 'advisor_approved': return 'bg-emerald-100 text-emerald-800';
+      case 'internal_committee': return 'bg-purple-100 text-purple-800';
+      case 'partners_committee': return 'bg-orange-100 text-orange-800';
       case 'approved': return 'bg-green-100 text-green-800';
       case 'rejected': return 'bg-red-100 text-red-800';
       case 'cancelled': return 'bg-gray-100 text-gray-800';
@@ -281,10 +284,27 @@ export default function AutorizacionesPage() {
     switch (status) {
       case 'pending': return <Clock className="w-4 h-4" />;
       case 'in_review': return <Users className="w-4 h-4" />;
+      case 'advisor_approved': return <UserCheck className="w-4 h-4" />;
+      case 'internal_committee': return <Building2 className="w-4 h-4" />;
+      case 'partners_committee': return <Users className="w-4 h-4" />;
       case 'approved': return <CheckCircle className="w-4 h-4" />;
       case 'rejected': return <XCircle className="w-4 h-4" />;
-      case 'cancelled': return <XCircle className="w-4 h-4" />;
+      case 'cancelled': return <Trash2 className="w-4 h-4" />;
       default: return <Clock className="w-4 h-4" />;
+    }
+  };
+
+  const getStatusText = (status: string) => {
+    switch (status) {
+      case 'pending': return 'Pendiente';
+      case 'in_review': return 'En Revisión';
+      case 'advisor_approved': return 'Aprobado por Asesor';
+      case 'internal_committee': return 'En Comité Interno';
+      case 'partners_committee': return 'En Comité de Socios';
+      case 'approved': return 'Aprobado Final';
+      case 'rejected': return 'Rechazado';
+      case 'cancelled': return 'Cancelado';
+      default: return status;
     }
   };
 
@@ -294,6 +314,9 @@ export default function AutorizacionesPage() {
       return {
         pending: 0,
         in_review: 0,
+        advisor_approved: 0,
+        internal_committee: 0,
+        partners_committee: 0,
         approved: 0,
         rejected: 0,
         cancelled: 0,
@@ -304,6 +327,9 @@ export default function AutorizacionesPage() {
     return {
       pending: requests.filter(r => r.status === 'pending').length,
       in_review: requests.filter(r => r.status === 'in_review').length,
+      advisor_approved: requests.filter(r => r.status === 'advisor_approved').length,
+      internal_committee: requests.filter(r => r.status === 'internal_committee').length,
+      partners_committee: requests.filter(r => r.status === 'partners_committee').length,
       approved: requests.filter(r => r.status === 'approved').length,
       rejected: requests.filter(r => r.status === 'rejected').length,
       cancelled: requests.filter(r => r.status === 'cancelled').length,
@@ -383,7 +409,7 @@ export default function AutorizacionesPage() {
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-4 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-3 mb-8">
           <div className="bg-white p-4 rounded-2xl shadow-lg border border-gray-100">
             <div className="flex items-center">
               <div className="p-2 bg-yellow-100 rounded-lg">
@@ -408,17 +434,29 @@ export default function AutorizacionesPage() {
             </div>
                 </div>
 
+                    <div className="bg-white p-4 rounded-2xl shadow-lg border border-gray-100">
+            <div className="flex items-center">
+              <div className="p-2 bg-purple-100 rounded-lg">
+                <Building2 className="w-5 h-5 text-purple-600" />
+              </div>
+              <div className="ml-3">
+                <p className="text-xs font-medium text-gray-600 uppercase tracking-wider">Comité Int.</p>
+                <p className="text-xl font-bold text-gray-900">{stats.internal_committee}</p>
+              </div>
+            </div>
+          </div>
+
           <div className="bg-white p-4 rounded-2xl shadow-lg border border-gray-100">
             <div className="flex items-center">
               <div className="p-2 bg-green-100 rounded-lg">
                 <CheckCircle className="w-5 h-5 text-green-600" />
-                </div>
+              </div>
               <div className="ml-3">
                 <p className="text-xs font-medium text-gray-600 uppercase tracking-wider">Aprobadas</p>
                 <p className="text-xl font-bold text-gray-900">{stats.approved}</p>
               </div>
             </div>
-                </div>
+          </div>
 
           <div className="bg-white p-4 rounded-2xl shadow-lg border border-gray-100">
             <div className="flex items-center">
@@ -467,9 +505,9 @@ export default function AutorizacionesPage() {
                   { value: 'all', label: 'Todas' },
                   { value: 'pending', label: 'Pendientes' },
                   { value: 'in_review', label: 'En Revisión' },
+                  { value: 'internal_committee', label: 'Comité Interno' },
                   { value: 'approved', label: 'Aprobadas' },
-                  { value: 'rejected', label: 'Rechazadas' },
-                  { value: 'cancelled', label: 'Canceladas' }
+                  { value: 'rejected', label: 'Rechazadas' }
                 ].map((filter) => (
                   <button
                     key={filter.value}
@@ -669,13 +707,7 @@ export default function AutorizacionesPage() {
                     
                     <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(request.status)}`}>
                       {getStatusIcon(request.status)}
-                      <span className="ml-2">
-                        {request.status === 'pending' ? 'Pendiente' : 
-                         request.status === 'in_review' ? 'En Revisión' :
-                         request.status === 'approved' ? 'Aprobada' : 
-                         request.status === 'rejected' ? 'Rechazada' :
-                         request.status === 'cancelled' ? 'Cancelada' : request.status}
-                      </span>
+                      <span className="ml-2">{getStatusText(request.status)}</span>
                     </span>
                   </div>
 
@@ -727,13 +759,35 @@ export default function AutorizacionesPage() {
                         <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">Estado del Asesor</span>
                       </div>
                       {request.status === 'pending' ? (
-                        <p className="text-sm font-medium text-gray-500">Sin asignar</p>
+                        <div>
+                          <p className="text-sm font-medium text-gray-500">Sin asignar</p>
+                          <p className="text-xs text-gray-400">Cualquier asesor puede reclamar</p>
+                        </div>
                       ) : request.status === 'in_review' ? (
                         <div>
                           <p className="text-sm font-medium text-gray-900">
                             {request.reviewerName || 'Asesor asignado'}
                           </p>
-                          <p className="text-xs text-emerald-600 font-medium">Reclamado por este asesor</p>
+                          <p className="text-xs text-emerald-600 font-medium">
+                            {request.reviewerId === user?.id ? 'Reclamado por ti' : `Reclamado por este asesor`}
+                          </p>
+                        </div>
+                      ) : request.status === 'advisor_approved' ? (
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">
+                            {request.reviewerName || 'Asesor'}
+                          </p>
+                          <p className="text-xs text-green-600 font-medium">Aprobado por asesor</p>
+                        </div>
+                      ) : request.status === 'internal_committee' ? (
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">Comité Interno</p>
+                          <p className="text-xs text-purple-600 font-medium">En revisión interna</p>
+                        </div>
+                      ) : request.status === 'partners_committee' ? (
+                        <div>
+                          <p className="text-sm font-medium text-gray-900">Comité Socios</p>
+                          <p className="text-xs text-orange-600 font-medium">En comité de socios</p>
                         </div>
                       ) : (
                         <div>
@@ -741,7 +795,7 @@ export default function AutorizacionesPage() {
                             {request.reviewerName || 'Procesado'}
                           </p>
                           <p className="text-xs text-gray-500">
-                            {request.status === 'approved' ? 'Aprobado' : 
+                            {request.status === 'approved' ? 'Aprobado final' : 
                              request.status === 'rejected' ? 'Rechazado' : 
                              request.status === 'cancelled' ? 'Cancelado' : 'Procesado'}
                           </p>

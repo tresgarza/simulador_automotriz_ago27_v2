@@ -13,38 +13,63 @@ import type { AuthorizationRequest } from "../../../lib/supabase";
 
 // Función para calcular el progreso de completado del formulario
 export const calculateFormProgress = (data: any): { percentage: number; completedFields: number; totalFields: number; isComplete: boolean } => {
+  if (!data) {
+    return { percentage: 0, completedFields: 0, totalFields: 31, isComplete: false };
+  }
+
   const requiredFields = [
     'company', 'applicant_name', 'position', 'age', 'marital_status', 
     'seniority', 'monthly_salary', 'requested_amount', 'term_months', 
     'interest_rate', 'opening_fee', 'monthly_capacity', 'monthly_discount'
   ];
   
-  const incomeFields = [
-    'mes1_nomina', 'mes1_comisiones', 'mes1_negocio', 'mes1_efectivo',
-    'mes2_nomina', 'mes2_comisiones', 'mes2_negocio', 'mes2_efectivo',
-    'mes3_nomina', 'mes3_comisiones', 'mes3_negocio', 'mes3_efectivo'
-  ];
+  // Verificar campos de ingresos (arrays anidados)
+  const hasIncomeData = data.incomes && Array.isArray(data.incomes) && data.incomes.length >= 3;
   
-  const expenseFields = [
-    'mes1_compromisos', 'mes1_gastos_personales',
-    'mes2_compromisos', 'mes2_gastos_personales',
-    'mes3_compromisos', 'mes3_gastos_personales'
-  ];
+  // Verificar campos de gastos (arrays anidados)  
+  const hasExpenseData = (data.commitments && Array.isArray(data.commitments) && data.commitments.length >= 3) ||
+                         (data.personal_expenses && Array.isArray(data.personal_expenses) && data.personal_expenses.length >= 3);
   
-  const allFields = [...requiredFields, ...incomeFields, ...expenseFields];
+  // Verificar datos del vehículo
+  const vehicleFields = ['dealership', 'vehicle_brand', 'vehicle_model', 'vehicle_year', 'sale_value', 'book_value'];
+  
+  // Verificar competidores
+  const hasCompetitors = data.competitors && Array.isArray(data.competitors) && 
+                        data.competitors.some(c => c.name && c.price);
   
   let completedFields = 0;
+  const totalSections = 6; // Datos básicos, ingresos, gastos, vehículo, competidores, comentarios
   
-  allFields.forEach(field => {
-    const value = data?.[field];
+  // Contar campos básicos completados
+  let basicFieldsCompleted = 0;
+  requiredFields.forEach(field => {
+    const value = data[field];
     if (value !== undefined && value !== null && value !== '' && value !== 0) {
-      completedFields++;
+      basicFieldsCompleted++;
     }
   });
   
-  const totalFields = allFields.length;
+  // Calcular progreso por secciones
+  if (basicFieldsCompleted >= 10) completedFields += 2; // Datos básicos valen 2 puntos
+  if (hasIncomeData) completedFields += 2; // Ingresos valen 2 puntos
+  if (hasExpenseData) completedFields += 1; // Gastos valen 1 punto
+  
+  // Verificar datos del vehículo
+  let vehicleFieldsCompleted = 0;
+  vehicleFields.forEach(field => {
+    const value = data[field];
+    if (value !== undefined && value !== null && value !== '' && value !== 0) {
+      vehicleFieldsCompleted++;
+    }
+  });
+  if (vehicleFieldsCompleted >= 4) completedFields += 1; // Vehículo vale 1 punto
+  
+  if (hasCompetitors) completedFields += 1; // Competidores valen 1 punto
+  if (data.comments && data.comments.trim().length > 10) completedFields += 1; // Comentarios valen 1 punto
+  
+  const totalFields = 8; // Total de puntos posibles
   const percentage = Math.round((completedFields / totalFields) * 100);
-  const isComplete = percentage >= 80; // Consideramos completo si tiene al menos 80% de los campos
+  const isComplete = percentage >= 75; // Consideramos completo si tiene al menos 75% de los puntos
   
   return { percentage, completedFields, totalFields, isComplete };
 };
@@ -161,8 +186,9 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
     return 0;
   };
 
-  // Extraer valores numéricos correctos
-  const monthlyPaymentValue = getNumericValue(request.monthly_payment);
+  // Extraer valores numéricos correctos - Usar pmt_total_month2 de la simulación
+  const monthlyPaymentValue = getNumericValue(request.simulation?.pmt_total_month2) || 
+                             getNumericValue(request.monthly_payment) || 0;
   const vehicleValueValue = getNumericValue(request.vehicle_value);
   const requestedAmountValue = getNumericValue(request.requested_amount);
 
