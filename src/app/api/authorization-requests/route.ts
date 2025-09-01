@@ -150,6 +150,7 @@ export async function GET(request: NextRequest) {
           tier_code,
           term_months,
           monthly_payment,
+          pmt_total_month2,
           total_to_finance,
           financed_amount,
           calculated_at

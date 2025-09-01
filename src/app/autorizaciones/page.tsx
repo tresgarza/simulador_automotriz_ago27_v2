@@ -11,7 +11,7 @@ import { AuthorizationForm, calculateFormProgress } from "../../components/autho
 interface AuthorizationRequest {
   id: string;
   simulation: SimulationWithQuote | null;
-  status: 'pending' | 'approved' | 'rejected' | 'in_review' | 'cancelled';
+  status: 'pending' | 'approved' | 'rejected' | 'in_review' | 'cancelled' | 'advisor_approved' | 'internal_committee' | 'partners_committee';
   createdAt: string;
   updatedAt?: string;
   reviewerId?: string;
@@ -29,6 +29,10 @@ interface AuthorizationRequest {
   vehicle_model?: string;
   vehicle_year?: number;
   vehicle_value?: number;
+  monthly_payment?: number;
+  requested_amount?: number;
+  term_months?: number;
+  authorization_data?: any;
 }
 
 export default function AutorizacionesPage() {
@@ -109,6 +113,7 @@ export default function AutorizacionesPage() {
           tier_code: authReq.z_auto_simulations.tier_code,
           term_months: authReq.z_auto_simulations.term_months,
           monthly_payment: authReq.z_auto_simulations.monthly_payment,
+          pmt_total_month2: authReq.z_auto_simulations.pmt_total_month2,
           total_to_finance: authReq.z_auto_simulations.total_to_finance,
           calculated_at: authReq.created_at,
           quote: authReq.z_auto_quotes ? {
@@ -140,7 +145,11 @@ export default function AutorizacionesPage() {
         vehicle_brand: authReq.vehicle_brand,
         vehicle_model: authReq.vehicle_model,
         vehicle_year: authReq.vehicle_year,
-        vehicle_value: authReq.vehicle_value
+        vehicle_value: authReq.vehicle_value,
+        monthly_payment: authReq.monthly_payment,
+        requested_amount: authReq.requested_amount,
+        term_months: authReq.term_months,
+        authorization_data: authReq.authorization_data
       }));
 
       setRequests(authorizationRequests);

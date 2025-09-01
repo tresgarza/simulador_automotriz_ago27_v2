@@ -195,13 +195,16 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
   // Debug: Log de los datos recibidos
   console.log('🔍 AuthorizationForm received data:', {
     request_id: request.id,
-    full_request: request, // LOG COMPLETO DEL REQUEST
     monthly_payment_raw: request.monthly_payment,
     monthly_payment_converted: monthlyPaymentValue,
-    vehicle_value_raw: request.vehicle_value,
-    vehicle_value_converted: vehicleValueValue,
     simulation_exists: !!request.simulation,
-    simulation_pmt_total_month2: request.simulation?.pmt_total_month2
+    simulation_pmt_total_month2: request.simulation?.pmt_total_month2,
+    simulation_monthly_payment: request.simulation?.monthly_payment,
+    pmt_calculation_priority: {
+      first: request.simulation?.pmt_total_month2,
+      second: request.monthly_payment,
+      final: monthlyPaymentValue
+    }
   });
 
   // Alert removido - debugging completado
