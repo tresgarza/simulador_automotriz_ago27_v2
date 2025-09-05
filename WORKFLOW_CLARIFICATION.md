@@ -73,3 +73,5 @@
 3. **Mejorar indicadores de estados**
 4. **Implementar PDF generation**
 5. **Completar todos los estados del workflow**
+
+

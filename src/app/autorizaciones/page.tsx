@@ -1,49 +1,37 @@
 "use client";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { FileCheck, Users, Search, Filter, Eye, CheckCircle, XCircle, Clock, ChevronRight, Grid, List, Trash2, UserCheck, AlertTriangle, Calendar, User, Home, LogOut, Building2 } from "lucide-react";
+import { FileCheck, Users, Search, Filter, Eye, CheckCircle, XCircle, Clock, ChevronRight, Grid, List, Trash2, UserCheck, AlertTriangle, Calendar, User, Home, LogOut, Building2, TrendingUp, Activity } from "lucide-react";
 import Link from "next/link";
 import { useAuth } from "../../../lib/auth";
 import { SimulationService, SimulationWithQuote } from "../../../lib/simulation-service";
-import { AuthorizationService } from "../../../lib/authorization-service";
-import { formatMXN } from "@/lib/utils";
-import { AuthorizationForm, calculateFormProgress } from "../../components/authorization/AuthorizationForm";
-import { generateAuthorizationPDF, PDFAuthorizationData } from "../../lib/pdf-generator";
+import { AuthorizationService, AuthorizationRequest as ServiceAuthorizationRequest } from "../../../lib/authorization-service";
+import { AuthorizationRequest as SupabaseAuthorizationRequest } from "../../../lib/supabase";
+import { formatMXN, cn } from "@/lib/utils";
+import { AuthorizationForm, calculateFormProgress } from "../../components/authorization/AuthorizationFormFullscreen";
+import { generateProfessionalAuthorizationPDF, ProfessionalAuthorizationData } from "../../lib/professional-authorization-pdf";
+import { generateClientCreditAuthorizationPDF, ClientCreditAuthorizationData } from "../../lib/client-credit-authorization-pdf";
 
-interface AuthorizationRequest {
-  id: string;
-  simulation: SimulationWithQuote | null;
-  status: 'pending' | 'approved' | 'rejected' | 'in_review' | 'cancelled' | 'advisor_approved' | 'internal_committee' | 'partners_committee';
-  createdAt: string;
+interface ExtendedAuthorizationRequest extends ServiceAuthorizationRequest {
+  simulation?: SimulationWithQuote | null;
+  createdAt?: string;
   updatedAt?: string;
   reviewerId?: string;
   reviewerName?: string;
-  priority?: 'low' | 'medium' | 'high' | 'urgent';
   riskLevel?: 'low' | 'medium' | 'high';
   clientComments?: string;
   internalNotes?: string;
   approvalNotes?: string;
-  // Campos directos de la solicitud (cuando no hay simulación)
-  client_name?: string;
-  client_email?: string;
-  client_phone?: string;
-  vehicle_brand?: string;
-  vehicle_model?: string;
-  vehicle_year?: number;
-  vehicle_value?: number;
-  monthly_payment?: number;
-  requested_amount?: number;
-  term_months?: number;
-  authorization_data?: any;
+  competitors_data?: Array<{ name: string; price: number }>;
 }
 
 export default function AutorizacionesPage() {
   const { user, isAsesor, logout } = useAuth();
-  const [requests, setRequests] = useState<AuthorizationRequest[]>([]);
-  const [filteredRequests, setFilteredRequests] = useState<AuthorizationRequest[]>([]);
+  const [requests, setRequests] = useState<ExtendedAuthorizationRequest[]>([]);
+  const [filteredRequests, setFilteredRequests] = useState<ExtendedAuthorizationRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'in_review' | 'advisor_approved' | 'internal_committee' | 'partners_committee' | 'approved' | 'rejected' | 'cancelled'>('all');
-  const [selectedRequest, setSelectedRequest] = useState<AuthorizationRequest | null>(null);
+  const [selectedRequest, setSelectedRequest] = useState<ExtendedAuthorizationRequest | null>(null);
   const [showAuthorizationForm, setShowAuthorizationForm] = useState(false);
   const [isHydrated, setIsHydrated] = useState(false);
   const [isLoadingData, setIsLoadingData] = useState(false);
@@ -113,8 +101,8 @@ export default function AutorizacionesPage() {
         pmt_total_month2: result.authorization_requests[0]?.z_auto_simulations?.pmt_total_month2
       });
 
-      // Transformar los datos para que coincidan con la interfaz AuthorizationRequest
-      const authorizationRequests: AuthorizationRequest[] = result.authorization_requests.map((authReq: any) => {
+      // Transformar los datos para que coincidan con la interfaz ExtendedAuthorizationRequest
+      const authorizationRequests: ExtendedAuthorizationRequest[] = result.authorization_requests.map((authReq: any) => {
         console.log('🔄 Mapping request:', {
           id: authReq.id,
           has_simulation: !!authReq.z_auto_simulations,
@@ -203,7 +191,23 @@ export default function AutorizacionesPage() {
     }
   }, [filterRequests, isHydrated]);
 
-  const handleAuthorizeRequest = (request: AuthorizationRequest) => {
+  const handleAuthorizeRequest = (request: ExtendedAuthorizationRequest) => {
+    // Advertencia especial si la solicitud está en comité de socios
+    if (request.status === 'partners_committee') {
+      const confirmEdit = confirm(
+        `⚠️ ADVERTENCIA: Esta solicitud está en Comité de Socios\n\n` +
+        `Si realiza cualquier cambio al formulario:\n` +
+        `• La solicitud regresará automáticamente a "En Revisión"\n` +
+        `• Deberá pasar de nuevo por Comité Interno\n` +
+        `• Y luego nuevamente por Comité de Socios\n\n` +
+        `¿Está seguro que desea continuar?`
+      );
+      
+      if (!confirmEdit) {
+        return;
+      }
+    }
+    
     setSelectedRequest(request);
     setShowAuthorizationForm(true);
   };
@@ -225,40 +229,34 @@ export default function AutorizacionesPage() {
         return;
       }
       
-      const result = await AuthorizationService.claimAuthorizationRequest(requestId, user.id);
+      // Confirmar reclamación
+      const confirmMessage = `¿Estás seguro de reclamar esta solicitud?\n\nAl reclamarla:\n• Se asignará exclusivamente a ti\n• Otros asesores no podrán trabajar en ella\n• Serás responsable de completar el proceso`;
       
-      if (result.success) {
-        loadAuthorizationRequests(); // Recargar datos
-        alert('✅ Solicitud reclamada exitosamente');
-      } else {
-        alert('Error al reclamar la solicitud: ' + result.error);
-      }
-    } catch (error) {
-      console.error('Error al reclamar solicitud:', error);
-      alert('Error al reclamar la solicitud');
-    }
-  };
-
-  const handleApproveAsAdvisor = async (requestId: string) => {
-    try {
-      if (!user?.id) {
-        alert('Error: Usuario no autenticado');
+      if (!confirm(confirmMessage)) {
         return;
       }
       
-      const result = await AuthorizationService.markAdvisorReviewed(requestId, user.id, 'Aprobado por asesor desde el sistema');
+      console.log('🎯 Reclamando solicitud:', { requestId, advisorId: user.id });
+      
+      const result = await AuthorizationService.claimAuthorizationRequest(requestId, user.id);
       
       if (result.success) {
+        console.log('✅ Solicitud reclamada exitosamente');
         loadAuthorizationRequests(); // Recargar datos
-        alert('✅ Solicitud aprobada como asesor exitosamente');
+        
+        // Mostrar mensaje de éxito más informativo
+        alert(`✅ Solicitud reclamada exitosamente!\n\n• Ahora está asignada a ti\n• Puedes completar el formulario de autorización\n• Estado cambiado a "En Revisión"`);
       } else {
-        alert('Error al aprobar como asesor: ' + result.error);
+        console.error('❌ Error al reclamar:', result.error);
+        alert('Error al reclamar la solicitud: ' + result.error);
       }
     } catch (error) {
-      console.error('Error al aprobar como asesor:', error);
-      alert('Error al aprobar como asesor');
+      console.error('💥 Exception al reclamar solicitud:', error);
+      alert('Error al reclamar la solicitud: ' + (error as Error).message);
     }
   };
+
+
 
   const handleRejectRequest = async (requestId: string) => {
     const reason = prompt('¿Motivo del rechazo?');
@@ -312,41 +310,178 @@ export default function AutorizacionesPage() {
     window.location.href = '/'; // Redirigir al inicio
   };
 
-  const handleSendToInternalCommittee = async (requestId: string) => {
-    if (!confirm('¿Está seguro de enviar esta solicitud al Comité Interno? Una vez enviada, no podrá modificar el formulario.')) return;
-    
+  const handleApproveAsAdvisor = async (requestId: string) => {
     try {
       if (!user?.id) {
         alert('Error: Usuario no autenticado');
         return;
       }
       
-      const result = await AuthorizationService.approveByInternalCommittee(requestId, user.id, 'Enviado a comité interno desde el sistema');
-      
-      if (result.success) {
-        loadAuthorizationRequests(); // Recargar datos
-        alert('✅ Solicitud enviada al Comité Interno exitosamente');
+      // Verificar que el formulario esté completo
+      const request = requests.find(r => r.id === requestId);
+      if (request?.authorization_data) {
+        const progress = calculateFormProgress(request.authorization_data);
+        if (!progress.isComplete) {
+          alert(`⚠️ No se puede aprobar y enviar a comité\n\nEl formulario está ${progress.percentage}% completo.\nDebe estar 100% completo para enviar al comité.\n\nCampos faltantes:\n${progress.missingFields.slice(0, 3).join('\n')}`);
+          return;
+        }
       } else {
-        alert('Error al enviar al comité interno: ' + result.error);
+        alert('⚠️ No se puede aprobar y enviar a comité\n\nDebe completar el formulario de autorización antes de enviar.');
+        return;
+      }
+      
+      // Solicitar comentarios adicionales
+      const advisorNotes = prompt('Comentarios como asesor (opcional):');
+      
+      const confirmMessage = `¿Aprobar esta solicitud y enviar al Comité Interno?\n\n✅ ACCIÓN DEL ASESOR:\n• Usted aprueba la solicitud como asesor\n• Se envía automáticamente al comité interno\n• Puede seguir editando el formulario si es necesario\n• El comité tomará la decisión final`;
+      
+      if (!confirm(confirmMessage)) return;
+      
+      console.log('✅ Aprobando como asesor y enviando a comité:', { requestId, userId: user.id, advisorNotes });
+      
+      // Usar la API REST directamente para cambiar estado a internal_committee
+      const { request: updatedRequest, error } = await AuthorizationService.updateAuthorizationRequest(requestId, {
+        status: 'internal_committee',
+        advisor_reviewed_by: user.id,
+        advisor_reviewed_at: new Date().toISOString(),
+        internal_notes: `${advisorNotes || 'Aprobado por asesor y enviado a comité interno'}\n\nAsesor: ${user.name} - Aprobado y enviado a comité interno el ${new Date().toLocaleString()}`
+      });
+      
+      if (!error) {
+        console.log('✅ Solicitud aprobada por asesor y enviada al comité interno');
+        loadAuthorizationRequests(); // Recargar datos
+        alert(`✅ Solicitud aprobada y enviada al Comité Interno!\n\n• Estado: "En Comité Interno"\n• Puede seguir editando si el comité solicita cambios\n• Recibirá notificación de la decisión final`);
+      } else {
+        console.error('❌ Error al aprobar como asesor:', error);
+        alert('Error al aprobar como asesor: ' + error);
       }
     } catch (error) {
-      console.error('Error al enviar a comité interno:', error);
-      alert('Error al enviar la solicitud al comité interno');
+      console.error('💥 Exception al aprobar como asesor:', error);
+      alert('Error al aprobar la solicitud como asesor: ' + (error as Error).message);
     }
   };
 
-  const handleDownloadPDF = async (request: AuthorizationRequest) => {
+
+  const handleInternalCommitteeApproval = async (requestId: string, approve: boolean) => {
+    try {
+      if (!user?.id) {
+        alert('Error: Usuario no autenticado');
+        return;
+      }
+      
+      const action = approve ? 'aprobar' : 'rechazar';
+      const notes = prompt(`Comentarios del comité interno para ${action} la solicitud:`);
+      
+      if (!notes) {
+        alert('Los comentarios son obligatorios para las decisiones del comité interno.');
+        return;
+      }
+      
+      const confirmMessage = approve 
+        ? `¿Aprobar esta solicitud para enviar al Comité de Socios?\n\n✅ La solicitud pasará a la etapa final de aprobación`
+        : `¿Rechazar definitivamente esta solicitud?\n\n❌ Esta acción no se puede deshacer`;
+      
+      if (!confirm(confirmMessage)) return;
+      
+      console.log(`🏛️ Comité interno ${action}:`, { requestId, userId: user.id, notes });
+      
+      if (approve) {
+        // Aprobar y enviar a comité de socios usando API REST
+        const { request: updatedRequest, error } = await AuthorizationService.updateAuthorizationRequest(requestId, {
+          status: 'partners_committee',
+          internal_committee_reviewed_by: user.id,
+          internal_committee_reviewed_at: new Date().toISOString(),
+          internal_notes: `${notes}\n\nComité Interno: ${user.name} - Aprobado el ${new Date().toLocaleString()}`
+        });
+        
+        if (!error) {
+          loadAuthorizationRequests();
+          alert(`✅ Solicitud aprobada por Comité Interno!\n\n• Estado cambiado a "En Comité de Socios"\n• Última etapa antes de aprobación final`);
+        } else {
+          alert('Error al aprobar en comité interno: ' + error);
+        }
+      } else {
+        // Rechazar solicitud
+        const result = await AuthorizationService.rejectAuthorizationRequest(requestId, user.id, notes, 'internal_committee');
+        
+        if (result.success) {
+          loadAuthorizationRequests();
+          alert(`❌ Solicitud rechazada por Comité Interno\n\n• Proceso terminado\n• Razón: ${notes}`);
+        } else {
+          alert('Error al rechazar en comité interno: ' + result.error);
+        }
+      }
+    } catch (error) {
+      console.error('💥 Exception en comité interno:', error);
+      alert('Error en la decisión del comité interno: ' + (error as Error).message);
+    }
+  };
+
+  const handleFinalApproval = async (requestId: string, approve: boolean) => {
+    try {
+      if (!user?.id) {
+        alert('Error: Usuario no autenticado');
+        return;
+      }
+      
+      const action = approve ? 'APROBAR FINALMENTE' : 'rechazar';
+      const notes = prompt(`Comentarios del comité de socios para ${action} la solicitud:`);
+      
+      if (!notes) {
+        alert('Los comentarios son obligatorios para las decisiones finales.');
+        return;
+      }
+      
+      const confirmMessage = approve 
+        ? `¿APROBAR FINALMENTE esta solicitud?\n\n🎉 Esta es la aprobación final - el crédito será dispersado`
+        : `¿RECHAZAR definitivamente esta solicitud?\n\n❌ Esta acción no se puede deshacer`;
+      
+      if (!confirm(confirmMessage)) return;
+      
+      console.log(`🏛️ Comité socios ${action}:`, { requestId, userId: user.id, notes });
+      
+      if (approve) {
+        // Aprobación final
+        const { request: updatedRequest, error } = await AuthorizationService.updateAuthorizationRequest(requestId, {
+          status: 'approved',
+          approval_notes: notes
+        });
+        
+        if (!error) {
+          loadAuthorizationRequests();
+          alert(`🎉 ¡SOLICITUD APROBADA FINALMENTE!\n\n• Proceso completado exitosamente\n• Lista para dispersión del crédito\n• Cliente será notificado`);
+        } else {
+          alert('Error en aprobación final: ' + error);
+        }
+      } else {
+        // Rechazo final
+        const result = await AuthorizationService.rejectAuthorizationRequest(requestId, user.id, notes, 'partners_committee');
+        
+        if (result.success) {
+          loadAuthorizationRequests();
+          alert(`❌ Solicitud rechazada por Comité de Socios\n\n• Proceso terminado definitivamente\n• Razón: ${notes}`);
+        } else {
+          alert('Error al rechazar en comité de socios: ' + result.error);
+        }
+      }
+    } catch (error) {
+      console.error('💥 Exception en comité de socios:', error);
+      alert('Error en la decisión final: ' + (error as Error).message);
+    }
+  };
+
+  const handleDownloadPDF = async (request: ExtendedAuthorizationRequest) => {
     try {
       console.log('📄 Generando PDF para request:', request.id);
       
-      // Preparar datos para el PDF
-      const pdfData: PDFAuthorizationData = {
+      // Preparar datos para el PDF profesional
+      const pdfData: ProfessionalAuthorizationData = {
         id: request.id,
         client_name: request.simulation?.quote?.client_name || request.client_name || 'Cliente no especificado',
         client_email: request.simulation?.quote?.client_email || request.client_email,
         client_phone: request.simulation?.quote?.client_phone || request.client_phone,
         status: request.status,
-        created_at: request.createdAt,
+        created_at: request.createdAt || request.created_at,
         
         // Información del vehículo
         vehicle_brand: request.simulation?.quote?.vehicle_brand || request.vehicle_brand,
@@ -358,19 +493,24 @@ export default function AutorizacionesPage() {
         monthly_payment: request.simulation?.pmt_total_month2 || request.simulation?.monthly_payment || request.monthly_payment,
         requested_amount: request.requested_amount,
         term_months: request.simulation?.term_months || request.term_months,
+        interest_rate: request.authorization_data?.interest_rate as number | undefined,
+        opening_fee: request.authorization_data?.opening_fee as number | undefined,
         
         // Información del asesor
         reviewer_name: request.reviewerName,
-        agency_name: request.simulation?.quote?.agency_name || 'No especificada',
+        agency_name: request.agency_name || 'No especificada',
+        
+        // Competidores desde múltiples fuentes
+        competitors_data: request.competitors_data || (request.authorization_data?.competitors as Array<{ name: string; price: number }>) || [],
         
         // Datos del formulario
         authorization_data: request.authorization_data
       };
       
-      console.log('📄 Datos preparados para PDF:', pdfData);
+      console.log('📄 Datos preparados para PDF profesional:', pdfData);
       
-      // Generar y descargar PDF
-      generateAuthorizationPDF(pdfData);
+      // Generar y descargar PDF profesional
+      await generateProfessionalAuthorizationPDF(pdfData);
       
       console.log('✅ PDF generado exitosamente');
       
@@ -380,47 +520,141 @@ export default function AutorizacionesPage() {
     }
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'pending': return 'bg-yellow-100 text-yellow-800';
-      case 'in_review': return 'bg-blue-100 text-blue-800';
-      case 'advisor_approved': return 'bg-emerald-100 text-emerald-800';
-      case 'internal_committee': return 'bg-purple-100 text-purple-800';
-      case 'partners_committee': return 'bg-orange-100 text-orange-800';
-      case 'approved': return 'bg-green-100 text-green-800';
-      case 'rejected': return 'bg-red-100 text-red-800';
-      case 'cancelled': return 'bg-gray-100 text-gray-800';
-      default: return 'bg-gray-100 text-gray-800';
+  const handleDownloadClientLetter = async (request: ExtendedAuthorizationRequest) => {
+    try {
+      console.log('📄 Generando Carta de Autorización para cliente:', request.id);
+      
+      // Preparar datos para la carta de autorización al cliente
+      const letterData: ClientCreditAuthorizationData = {
+        client: {
+          name: request.simulation?.quote?.client_name || request.client_name || 'Cliente',
+          address: (request.authorization_data?.address as string) || '',
+          city: (request.authorization_data?.city as string) || '',
+          state: (request.authorization_data?.state as string) || ''
+        },
+        authorization: {
+          id: request.id,
+          date: request.created_at || new Date().toISOString()
+        },
+        credit: {
+          requested_amount: request.requested_amount || 0,
+          term_months: request.simulation?.term_months || request.term_months || 0,
+          interest_rate_annual: (request.authorization_data?.interest_rate as number) || 0,
+          opening_fee_pct: (request.authorization_data?.opening_fee as number) || 0,
+          down_payment: (request.authorization_data?.down_payment as number) || 0
+        },
+        insurance: {
+          mode: request.authorization_data?.insurance_mode === 'financed' ? 'financed' : 'cash',
+          premium: (request.authorization_data?.insurance_premium as number) || 0,
+          term_months: (request.authorization_data?.insurance_term as number) || request.term_months || 0
+        },
+        payments: {
+          monthly_without_insurance: request.simulation?.pmt_total_month || request.monthly_payment || 0,
+          monthly_total: request.monthly_payment || request.simulation?.pmt_total_month2 || 0
+        },
+        vehicle: {
+          brand: request.simulation?.quote?.vehicle_brand || request.vehicle_brand || '',
+          model: request.simulation?.quote?.vehicle_model || request.vehicle_model || '',
+          year: request.simulation?.quote?.vehicle_year || request.vehicle_year || new Date().getFullYear(),
+          agency_value: request.simulation?.quote?.vehicle_value || request.vehicle_value || 0
+        },
+        agency: {
+          name: request.agency_name || 'Agencia'
+        },
+        valid_until: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString() // 7 días hábiles
+      };
+      
+      console.log('📄 Datos preparados para carta de autorización:', letterData);
+      
+      // Generar y descargar carta de autorización
+      await generateClientCreditAuthorizationPDF(letterData);
+      
+      console.log('✅ Carta de autorización generada exitosamente');
+      
+    } catch (error) {
+      console.error('❌ Error al generar carta de autorización:', error);
+      alert('Error al generar la carta de autorización: ' + (error as Error).message);
     }
   };
 
-  const getStatusIcon = (status: string) => {
-    switch (status) {
-      case 'pending': return <Clock className="w-4 h-4" />;
-      case 'in_review': return <Users className="w-4 h-4" />;
-      case 'advisor_approved': return <UserCheck className="w-4 h-4" />;
-      case 'internal_committee': return <Building2 className="w-4 h-4" />;
-      case 'partners_committee': return <Users className="w-4 h-4" />;
-      case 'approved': return <CheckCircle className="w-4 h-4" />;
-      case 'rejected': return <XCircle className="w-4 h-4" />;
-      case 'cancelled': return <Trash2 className="w-4 h-4" />;
-      default: return <Clock className="w-4 h-4" />;
-    }
+  // =========================================
+  // FUNCIONES MEJORADAS DE ESTADO
+  // =========================================
+
+  const getStatusConfig = (status: string) => {
+    const configs = {
+      'pending': {
+        color: 'bg-yellow-100 text-yellow-800 border-yellow-200',
+        icon: <Clock className="w-4 h-4" />,
+        text: 'Pendiente',
+        description: 'Esperando ser reclamada por un asesor',
+        nextAction: 'Reclamar solicitud',
+        priority: 1
+      },
+      'in_review': {
+        color: 'bg-blue-100 text-blue-800 border-blue-200',
+        icon: <Users className="w-4 h-4" />,
+        text: 'En Revisión',
+        description: 'Siendo revisada por asesor asignado',
+        nextAction: 'Completar formulario y aprobar',
+        priority: 2
+      },
+      'advisor_approved': {
+        color: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+        icon: <UserCheck className="w-4 h-4" />,
+        text: 'Aprobado por Asesor',
+        description: 'Aprobada por asesor, lista para comité interno',
+        nextAction: 'Enviar a comité interno',
+        priority: 3
+      },
+      'internal_committee': {
+        color: 'bg-purple-100 text-purple-800 border-purple-200',
+        icon: <Building2 className="w-4 h-4" />,
+        text: 'En Comité Interno',
+        description: 'Siendo evaluada por el comité interno',
+        nextAction: 'Decisión del comité interno',
+        priority: 4
+      },
+      'partners_committee': {
+        color: 'bg-orange-100 text-orange-800 border-orange-200',
+        icon: <Users className="w-4 h-4" />,
+        text: 'En Comité de Socios',
+        description: 'En evaluación final por comité de socios',
+        nextAction: 'Decisión final del comité',
+        priority: 5
+      },
+      'approved': {
+        color: 'bg-green-100 text-green-800 border-green-200',
+        icon: <CheckCircle className="w-4 h-4" />,
+        text: 'Aprobado Final',
+        description: 'Solicitud aprobada - Lista para dispersión',
+        nextAction: 'Proceso completado',
+        priority: 6
+      },
+      'rejected': {
+        color: 'bg-red-100 text-red-800 border-red-200',
+        icon: <XCircle className="w-4 h-4" />,
+        text: 'Rechazado',
+        description: 'Solicitud rechazada en alguna etapa',
+        nextAction: 'Proceso terminado',
+        priority: 7
+      },
+      'cancelled': {
+        color: 'bg-gray-100 text-gray-800 border-gray-200',
+        icon: <Trash2 className="w-4 h-4" />,
+        text: 'Cancelado',
+        description: 'Solicitud cancelada por el cliente o sistema',
+        nextAction: 'Proceso terminado',
+        priority: 8
+      }
+    };
+    
+    return configs[status as keyof typeof configs] || configs.pending;
   };
 
-  const getStatusText = (status: string) => {
-    switch (status) {
-      case 'pending': return 'Pendiente';
-      case 'in_review': return 'En Revisión';
-      case 'advisor_approved': return 'Aprobado por Asesor';
-      case 'internal_committee': return 'En Comité Interno';
-      case 'partners_committee': return 'En Comité de Socios';
-      case 'approved': return 'Aprobado Final';
-      case 'rejected': return 'Rechazado';
-      case 'cancelled': return 'Cancelado';
-      default: return status;
-    }
-  };
+  const getStatusColor = (status: string) => getStatusConfig(status).color;
+  const getStatusIcon = (status: string) => getStatusConfig(status).icon;
+  const getStatusText = (status: string) => getStatusConfig(status).text;
 
   // Memoize stats calculations to prevent unnecessary re-renders
   const stats = useMemo(() => {
@@ -522,9 +756,9 @@ export default function AutorizacionesPage() {
           </div>
         </div>
 
-        {/* Stats Cards */}
+        {/* Stats Cards Mejoradas */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-3 mb-8">
-          <div className="bg-white p-4 rounded-2xl shadow-lg border border-gray-100">
+          <div className="bg-white p-4 rounded-2xl shadow-lg border border-gray-100 hover:shadow-xl transition-shadow">
             <div className="flex items-center">
               <div className="p-2 bg-yellow-100 rounded-lg">
                 <Clock className="w-5 h-5 text-yellow-600" />
@@ -532,11 +766,12 @@ export default function AutorizacionesPage() {
               <div className="ml-3">
                 <p className="text-xs font-medium text-gray-600 uppercase tracking-wider">Pendientes</p>
                 <p className="text-xl font-bold text-gray-900">{stats.pending}</p>
+                <p className="text-xs text-yellow-600">Esperando asesor</p>
               </div>
             </div>
                 </div>
 
-          <div className="bg-white p-4 rounded-2xl shadow-lg border border-gray-100">
+          <div className="bg-white p-4 rounded-2xl shadow-lg border border-gray-100 hover:shadow-xl transition-shadow">
             <div className="flex items-center">
               <div className="p-2 bg-blue-100 rounded-lg">
                 <Users className="w-5 h-5 text-blue-600" />
@@ -544,11 +779,12 @@ export default function AutorizacionesPage() {
               <div className="ml-3">
                 <p className="text-xs font-medium text-gray-600 uppercase tracking-wider">En Revisión</p>
                 <p className="text-xl font-bold text-gray-900">{stats.in_review}</p>
+                <p className="text-xs text-blue-600">Con asesor</p>
               </div>
             </div>
                 </div>
 
-                    <div className="bg-white p-4 rounded-2xl shadow-lg border border-gray-100">
+          <div className="bg-white p-4 rounded-2xl shadow-lg border border-gray-100 hover:shadow-xl transition-shadow">
             <div className="flex items-center">
               <div className="p-2 bg-purple-100 rounded-lg">
                 <Building2 className="w-5 h-5 text-purple-600" />
@@ -556,11 +792,12 @@ export default function AutorizacionesPage() {
               <div className="ml-3">
                 <p className="text-xs font-medium text-gray-600 uppercase tracking-wider">Comité Int.</p>
                 <p className="text-xl font-bold text-gray-900">{stats.internal_committee}</p>
+                <p className="text-xs text-purple-600">En evaluación</p>
               </div>
             </div>
           </div>
 
-          <div className="bg-white p-4 rounded-2xl shadow-lg border border-gray-100">
+          <div className="bg-white p-4 rounded-2xl shadow-lg border border-gray-100 hover:shadow-xl transition-shadow">
             <div className="flex items-center">
               <div className="p-2 bg-green-100 rounded-lg">
                 <CheckCircle className="w-5 h-5 text-green-600" />
@@ -568,11 +805,12 @@ export default function AutorizacionesPage() {
               <div className="ml-3">
                 <p className="text-xs font-medium text-gray-600 uppercase tracking-wider">Aprobadas</p>
                 <p className="text-xl font-bold text-gray-900">{stats.approved}</p>
+                <p className="text-xs text-green-600">Listas dispersión</p>
               </div>
             </div>
           </div>
 
-          <div className="bg-white p-4 rounded-2xl shadow-lg border border-gray-100">
+          <div className="bg-white p-4 rounded-2xl shadow-lg border border-gray-100 hover:shadow-xl transition-shadow">
             <div className="flex items-center">
               <div className="p-2 bg-red-100 rounded-lg">
                 <XCircle className="w-5 h-5 text-red-600" />
@@ -580,11 +818,12 @@ export default function AutorizacionesPage() {
               <div className="ml-3">
                 <p className="text-xs font-medium text-gray-600 uppercase tracking-wider">Rechazadas</p>
                 <p className="text-xl font-bold text-gray-900">{stats.rejected}</p>
+                <p className="text-xs text-red-600">Proceso terminado</p>
               </div>
             </div>
                 </div>
 
-          <div className="bg-white p-4 rounded-2xl shadow-lg border border-gray-100">
+          <div className="bg-white p-4 rounded-2xl shadow-lg border border-gray-100 hover:shadow-xl transition-shadow">
             <div className="flex items-center">
               <div className="p-2 bg-gray-100 rounded-lg">
                 <FileCheck className="w-5 h-5 text-gray-600" />
@@ -592,7 +831,111 @@ export default function AutorizacionesPage() {
               <div className="ml-3">
                 <p className="text-xs font-medium text-gray-600 uppercase tracking-wider">Total</p>
                 <p className="text-xl font-bold text-gray-900">{stats.total}</p>
+                <p className="text-xs text-gray-600">Todas las solicitudes</p>
               </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Panel de Métricas Avanzadas */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+          {/* Eficiencia del Workflow */}
+          <div className="bg-white p-6 rounded-2xl shadow-lg border border-gray-100">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+              <TrendingUp className="w-5 h-5 text-emerald-600 mr-2" />
+              Eficiencia del Workflow
+            </h3>
+            <div className="space-y-3">
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-gray-600">Tasa de Aprobación</span>
+                <span className="font-semibold text-green-600">
+                  {stats.total > 0 ? Math.round(((stats.approved) / (stats.approved + stats.rejected)) * 100) : 0}%
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-gray-600">En Proceso</span>
+                <span className="font-semibold text-blue-600">
+                  {stats.pending + stats.in_review + stats.internal_committee + stats.partners_committee}
+                </span>
+              </div>
+              <div className="flex justify-between items-center">
+                <span className="text-sm text-gray-600">Finalizadas</span>
+                <span className="font-semibold text-gray-600">
+                  {stats.approved + stats.rejected + stats.cancelled}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Estado del Pipeline */}
+          <div className="bg-white p-6 rounded-2xl shadow-lg border border-gray-100">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+              <Activity className="w-5 h-5 text-blue-600 mr-2" />
+              Pipeline de Autorizaciones
+            </h3>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-sm">
+                <div className="flex items-center">
+                  <div className="w-3 h-3 bg-yellow-400 rounded-full mr-2"></div>
+                  <span>Pendientes</span>
+                </div>
+                <span className="font-medium">{stats.pending}</span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <div className="flex items-center">
+                  <div className="w-3 h-3 bg-blue-400 rounded-full mr-2"></div>
+                  <span>En Revisión</span>
+                </div>
+                <span className="font-medium">{stats.in_review}</span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <div className="flex items-center">
+                  <div className="w-3 h-3 bg-purple-400 rounded-full mr-2"></div>
+                  <span>Comité Interno</span>
+                </div>
+                <span className="font-medium">{stats.internal_committee}</span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <div className="flex items-center">
+                  <div className="w-3 h-3 bg-orange-400 rounded-full mr-2"></div>
+                  <span>Comité Socios</span>
+                </div>
+                <span className="font-medium">{stats.partners_committee}</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Acciones Rápidas */}
+          <div className="bg-white p-6 rounded-2xl shadow-lg border border-gray-100">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+              <AlertTriangle className="w-5 h-5 text-orange-600 mr-2" />
+              Acciones Requeridas
+            </h3>
+            <div className="space-y-2">
+              {stats.pending > 0 && (
+                <div className="flex items-center justify-between p-2 bg-yellow-50 rounded-lg">
+                  <span className="text-sm text-yellow-800">{stats.pending} solicitudes por reclamar</span>
+                  <Clock className="w-4 h-4 text-yellow-600" />
+                </div>
+              )}
+              {stats.internal_committee > 0 && (
+                <div className="flex items-center justify-between p-2 bg-purple-50 rounded-lg">
+                  <span className="text-sm text-purple-800">{stats.internal_committee} en comité interno</span>
+                  <Building2 className="w-4 h-4 text-purple-600" />
+                </div>
+              )}
+              {stats.partners_committee > 0 && (
+                <div className="flex items-center justify-between p-2 bg-orange-50 rounded-lg">
+                  <span className="text-sm text-orange-800">{stats.partners_committee} decisión final</span>
+                  <Users className="w-4 h-4 text-orange-600" />
+                </div>
+              )}
+              {(stats.pending + stats.internal_committee + stats.partners_committee) === 0 && (
+                <div className="text-center py-4 text-gray-500">
+                  <CheckCircle className="w-8 h-8 mx-auto mb-2 text-green-500" />
+                  <span className="text-sm">¡Todo al día!</span>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -620,6 +963,7 @@ export default function AutorizacionesPage() {
                   { value: 'pending', label: 'Pendientes' },
                   { value: 'in_review', label: 'En Revisión' },
                   { value: 'internal_committee', label: 'Comité Interno' },
+                  { value: 'partners_committee', label: 'Comité de Socios' },
                   { value: 'approved', label: 'Aprobadas' },
                   { value: 'rejected', label: 'Rechazadas' }
                 ].map((filter) => (
@@ -731,7 +1075,7 @@ export default function AutorizacionesPage() {
                       </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                      {new Date(request.createdAt).toLocaleDateString()}
+                      {new Date(request.createdAt || request.created_at).toLocaleDateString()}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
                       <div className="flex gap-2">
@@ -819,10 +1163,83 @@ export default function AutorizacionesPage() {
                       </div>
                     </div>
                     
-                    <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium ${getStatusColor(request.status)}`}>
+                    <div className="text-right">
+                      <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border ${getStatusColor(request.status)}`}>
                       {getStatusIcon(request.status)}
                       <span className="ml-2">{getStatusText(request.status)}</span>
                     </span>
+                      <div className="text-xs text-gray-500 mt-1">
+                        {getStatusConfig(request.status).description}
+                      </div>
+                      <div className="text-xs font-medium text-emerald-600 mt-1">
+                        Siguiente: {getStatusConfig(request.status).nextAction}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Workflow Timeline */}
+                  <div className="mb-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+                    <h4 className="text-sm font-medium text-gray-900 mb-3 flex items-center">
+                      <ChevronRight className="w-4 h-4 mr-1" />
+                      Flujo de Autorización
+                    </h4>
+                    <div className="flex items-center justify-between">
+                      {[
+                        { key: 'pending', label: 'Pendiente' },
+                        { key: 'in_review', label: 'Revisión' },
+                        { key: 'advisor_approved', label: 'Asesor ✓' },
+                        { key: 'internal_committee', label: 'Comité Int.' },
+                        { key: 'partners_committee', label: 'Comité Socios' },
+                        { key: 'approved', label: 'Aprobado' }
+                      ].map((stage, index, array) => {
+                        const currentStatusConfig = getStatusConfig(request.status);
+                        const stageConfig = getStatusConfig(stage.key);
+                        const isActive = request.status === stage.key;
+                        const isPassed = currentStatusConfig.priority > stageConfig.priority;
+                        const isCurrent = currentStatusConfig.priority === stageConfig.priority;
+                        
+                        return (
+                          <div key={stage.key} className="flex items-center">
+                            <div className={cn(
+                              "w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium transition-all",
+                              isPassed ? "bg-green-500 text-white" :
+                              isCurrent ? "bg-blue-500 text-white animate-pulse" :
+                              "bg-gray-300 text-gray-600"
+                            )}>
+                              {isPassed ? <CheckCircle className="w-4 h-4" /> :
+                               isCurrent ? stageConfig.icon :
+                               <div className="w-2 h-2 bg-current rounded-full"></div>}
+                            </div>
+                            <div className="ml-2 text-xs">
+                              <div className={cn(
+                                "font-medium",
+                                isPassed ? "text-green-700" :
+                                isCurrent ? "text-blue-700" :
+                                "text-gray-500"
+                              )}>
+                                {stage.label}
+                              </div>
+                            </div>
+                            {index < array.length - 1 && (
+                              <div className={cn(
+                                "flex-1 h-0.5 mx-2",
+                                isPassed ? "bg-green-500" : "bg-gray-300"
+                              )}></div>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                    
+                    {/* Información del Estado Actual */}
+                    <div className="mt-3 p-2 bg-white rounded border">
+                      <div className="text-xs text-gray-600">
+                        <span className="font-medium">Estado actual:</span> {getStatusConfig(request.status).description}
+                      </div>
+                      <div className="text-xs text-emerald-600 mt-1">
+                        <span className="font-medium">Siguiente acción:</span> {getStatusConfig(request.status).nextAction}
+                      </div>
+                    </div>
                   </div>
 
                   {/* Card Content */}
@@ -859,10 +1276,10 @@ export default function AutorizacionesPage() {
                         <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha</span>
                       </div>
                       <p className="text-sm font-medium text-gray-900">
-                        {new Date(request.createdAt).toLocaleDateString()}
+                        {new Date(request.createdAt || request.created_at).toLocaleDateString()}
                       </p>
                       <p className="text-xs text-gray-500">
-                        {new Date(request.createdAt).toLocaleTimeString()}
+                        {new Date(request.createdAt || request.created_at).toLocaleTimeString()}
                       </p>
                     </div>
 
@@ -921,48 +1338,86 @@ export default function AutorizacionesPage() {
                   {/* Form Progress - Solo para solicitudes en revisión */}
                   {request.status === 'in_review' && request.reviewerId === user?.id && (
                     <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-200">
+                      {(() => {
+                        const progress = request.authorization_data ? 
+                          calculateFormProgress(request.authorization_data) : 
+                          { percentage: 0, completedFields: 0, totalFields: 22, isComplete: false, sectionProgress: { personalData: { percentage: 0 }, financialData: { percentage: 0 }, vehicleData: { percentage: 0 } }, missingFields: [] };
+                        
+                        return (
+                          <>
                       <div className="flex items-center justify-between mb-2">
                         <span className="text-sm font-medium text-blue-900">Progreso del Formulario</span>
                         <span className="text-xs text-blue-700">
-                          {request.authorization_data ? 
-                            `${calculateFormProgress(request.authorization_data).percentage}% completado` : 
-                            '0% completado'}
+                                {progress.percentage}% completado ({progress.completedFields}/{progress.totalFields})
                         </span>
                       </div>
-                      <div className="w-full bg-blue-200 rounded-full h-2">
+                            <div className="w-full bg-blue-200 rounded-full h-2 mb-2">
                         <div 
                           className="bg-blue-600 h-2 rounded-full transition-all duration-300" 
-                          style={{ 
-                            width: `${request.authorization_data ? 
-                              calculateFormProgress(request.authorization_data).percentage : 0}%` 
-                          }}
+                                style={{ width: `${progress.percentage}%` }}
                         ></div>
                       </div>
-                      {request.authorization_data && calculateFormProgress(request.authorization_data).isComplete ? (
-                        <div className="mt-2 flex items-center text-sm text-green-700">
+                            
+                            {/* Progreso por Sección */}
+                            <div className="grid grid-cols-3 gap-2 text-xs mb-2">
+                              <div className="text-center">
+                                <div className="text-blue-600">Personal</div>
+                                <div className="font-medium">{progress.sectionProgress.personalData.percentage}%</div>
+                              </div>
+                              <div className="text-center">
+                                <div className="text-blue-600">Financiero</div>
+                                <div className="font-medium">{progress.sectionProgress.financialData.percentage}%</div>
+                              </div>
+                              <div className="text-center">
+                                <div className="text-blue-600">Vehículo</div>
+                                <div className="font-medium">{progress.sectionProgress.vehicleData.percentage}%</div>
+                              </div>
+                            </div>
+                            
+                            {progress.isComplete ? (
+                              <div className="flex items-center text-sm text-green-700">
                           <CheckCircle className="w-4 h-4 mr-1" />
                           Formulario completado - Listo para enviar a comité interno
                         </div>
                       ) : (
-                        <div className="mt-2 text-sm text-blue-700">
-                          Complete el formulario para poder enviar a revisión interna
+                              <div className="text-sm text-blue-700">
+                                {progress.missingFields.length > 0 ? (
+                                  <div>
+                                    Faltan: {progress.missingFields.slice(0, 2).join(', ')}
+                                    {progress.missingFields.length > 2 && ` y ${progress.missingFields.length - 2} más`}
                         </div>
+                                ) : (
+                                  'Complete el formulario para poder enviar a revisión interna'
                       )}
+                              </div>
+                            )}
+                          </>
+                        );
+                      })()}
                     </div>
                   )}
 
                   {/* Actions */}
                   <div className="flex gap-2 flex-wrap">
-                    {/* Revisar - Solo si no está asignado o está asignado al usuario actual */}
+                    {/* Revisar - El asesor puede revisar/editar hasta que esté aprobado final */}
                     {(request.status === 'pending' || 
                       (request.status === 'in_review' && request.reviewerId === user?.id) ||
-                      (request.status !== 'pending' && request.status !== 'in_review')) && (
+                      (request.status === 'internal_committee' && request.reviewerId === user?.id) ||
+                      (request.status === 'partners_committee' && request.reviewerId === user?.id)) && (
                       <button
                         onClick={() => handleAuthorizeRequest(request)}
-                        className="inline-flex items-center px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-700 transition-colors"
+                        className={`inline-flex items-center px-4 py-2 text-white text-sm font-medium rounded-lg transition-colors ${
+                          request.status === 'partners_committee' 
+                            ? 'bg-purple-600 hover:bg-purple-700' 
+                            : 'bg-emerald-600 hover:bg-emerald-700'
+                        }`}
                       >
                         <Eye className="w-4 h-4 mr-2" />
-                        Revisar
+                        {request.status === 'partners_committee' 
+                          ? 'Ver/Editar (⚠️ Regresará a Revisión)' 
+                          : request.status === 'internal_committee' 
+                          ? 'Editar Formulario' 
+                          : 'Revisar'}
                       </button>
                     )}
 
@@ -997,12 +1452,9 @@ export default function AutorizacionesPage() {
                     )}
 
                     {/* Enviar a Comité Interno - Solo si el formulario está completo */}
-                    {request.status === 'in_review' && 
-                     request.reviewerId === user?.id && 
-                     request.authorization_data && 
-                     calculateFormProgress(request.authorization_data).isComplete && (
+                    {request.status === 'advisor_approved' && (
                       <button
-                        onClick={() => handleSendToInternalCommittee(request.id)}
+                        onClick={() => handleApproveAsAdvisor(request.id)}
                         className="inline-flex items-center px-4 py-2 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700 transition-colors"
                       >
                         <Building2 className="w-4 h-4 mr-2" />
@@ -1010,9 +1462,66 @@ export default function AutorizacionesPage() {
                       </button>
                     )}
 
-                    {/* Descargar PDF - Solo si hay datos del formulario */}
+                    {/* Mostrar que se puede enviar a comité si está completo */}
                     {request.status === 'in_review' && 
                      request.reviewerId === user?.id && 
+                     request.authorization_data && 
+                     calculateFormProgress(request.authorization_data).isComplete && (
+                      <button
+                        onClick={() => handleApproveAsAdvisor(request.id)}
+                        className="inline-flex items-center px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors"
+                      >
+                        <CheckCircle className="w-4 h-4 mr-2" />
+                        Aprobar y Enviar a Comité
+                      </button>
+                    )}
+
+                    {/* Botones para Comité Interno */}
+                    {request.status === 'internal_committee' && (
+                      <>
+                        <button
+                          onClick={() => handleInternalCommitteeApproval(request.id, true)}
+                          className="inline-flex items-center px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors"
+                        >
+                          <CheckCircle className="w-4 h-4 mr-2" />
+                          Aprobar (Comité Int.)
+                        </button>
+                        <button
+                          onClick={() => handleInternalCommitteeApproval(request.id, false)}
+                          className="inline-flex items-center px-4 py-2 bg-red-600 text-white text-sm font-medium rounded-lg hover:bg-red-700 transition-colors"
+                        >
+                          <XCircle className="w-4 h-4 mr-2" />
+                          Rechazar (Comité Int.)
+                        </button>
+                      </>
+                    )}
+
+                    {/* Botones para Comité de Socios */}
+                    {request.status === 'partners_committee' && (
+                      <>
+                        <button
+                          onClick={() => handleFinalApproval(request.id, true)}
+                          className="inline-flex items-center px-4 py-2 bg-green-700 text-white text-sm font-medium rounded-lg hover:bg-green-800 transition-colors shadow-lg"
+                        >
+                          <CheckCircle className="w-4 h-4 mr-2" />
+                          🎉 APROBACIÓN FINAL
+                        </button>
+                        <button
+                          onClick={() => handleFinalApproval(request.id, false)}
+                          className="inline-flex items-center px-4 py-2 bg-red-700 text-white text-sm font-medium rounded-lg hover:bg-red-800 transition-colors"
+                        >
+                          <XCircle className="w-4 h-4 mr-2" />
+                          Rechazo Final
+                        </button>
+                      </>
+                    )}
+
+                    {/* Descargar PDF - Solo si hay datos del formulario */}
+                    {(request.status === 'in_review' || 
+                      request.status === 'advisor_approved' || 
+                      request.status === 'internal_committee' || 
+                      request.status === 'partners_committee' || 
+                      request.status === 'approved') && 
                      request.authorization_data && (
                       <button
                         onClick={() => handleDownloadPDF(request)}
@@ -1020,6 +1529,17 @@ export default function AutorizacionesPage() {
                       >
                         <FileCheck className="w-4 h-4 mr-2" />
                         Descargar PDF
+                      </button>
+                    )}
+
+                    {/* Carta de Autorización de Crédito - Solo cuando está aprobado */}
+                    {request.status === 'approved' && (
+                      <button
+                        onClick={() => handleDownloadClientLetter(request)}
+                        className="inline-flex items-center px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors"
+                      >
+                        <FileCheck className="w-4 h-4 mr-2" />
+                        Carta de Autorización de Crédito
                       </button>
                     )}
 
@@ -1057,7 +1577,7 @@ export default function AutorizacionesPage() {
       {/* Authorization Form Modal */}
       {showAuthorizationForm && selectedRequest && (
         <AuthorizationForm
-          request={selectedRequest}
+          request={selectedRequest as SupabaseAuthorizationRequest}
           onClose={handleCloseAuthorizationForm}
         />
       )}

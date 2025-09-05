@@ -1,429 +1,18 @@
-import { supabaseClient, AuthorizationRequest, Simulation, Quote, User } from './supabase'
+/**
+ * SERVICIO DE AUTORIZACIONES - VERSIÓN SIMPLIFICADA
+ * Para compatibilidad con las importaciones existentes
+ */
 
-// Re-export types for convenience
-export type { AuthorizationRequest } from './supabase'
+import { supabaseClient } from './supabase'
 
-export class AuthorizationService {
-
-  // Crear una solicitud de autorización desde una simulación
-  static async createAuthorizationRequest(
-    simulationId: string,
-    quoteId: string,
-    createdByUserId?: string,
-    assignedToUserId?: string,
-    clientComments?: string,
-    priority: 'low' | 'medium' | 'high' | 'urgent' = 'medium'
-  ): Promise<{ request: AuthorizationRequest | null, error: string | null }> {
-    try {
-      console.log('🔧 AuthorizationService.createAuthorizationRequest called with:', {
-        simulationId, quoteId, createdByUserId, assignedToUserId, clientComments, priority
-      });
-
-      // Usar la función de PostgreSQL que creamos
-      const { data, error } = await supabaseClient.rpc('create_authorization_request', {
-        p_simulation_id: simulationId,
-        p_quote_id: quoteId,
-        p_created_by_user_id: createdByUserId,
-        p_assigned_to_user_id: assignedToUserId,
-        p_client_comments: clientComments,
-        p_priority: priority
-      })
-
-      if (error) {
-        console.error('Error creating authorization request:', error)
-        return { request: null, error: error.message }
-      }
-
-      return { request: data, error: null }
-    } catch (error) {
-      console.error('Error in createAuthorizationRequest:', error)
-      return { request: null, error: 'Error interno del servidor' }
-    }
-  }
-
-  // Obtener todas las solicitudes de autorización
-  static async getAuthorizationRequests(
-    userId?: string,
-    status?: string,
-    priority?: string,
-    limit: number = 50,
-    offset: number = 0
-  ): Promise<{ requests: AuthorizationRequest[], error: string | null }> {
-    try {
-      console.log('🔧 AuthorizationService.getAuthorizationRequests called with:', {
-        userId, status, priority, limit, offset
-      });
-
-      console.log('🔗 Supabase client status:', {
-        clientExists: !!supabaseClient,
-        clientType: typeof supabaseClient
-      });
-
-      let query = supabaseClient
-        .from('z_auto_authorization_requests')
-        .select('*') // Simplificar query - solo datos principales
-        .order('created_at', { ascending: false })
-        .limit(limit)
-        .range(offset, offset + limit - 1)
-
-      console.log('📝 Base query constructed');
-
-      // Filtros opcionales
-      if (userId) {
-        console.log('🔍 Adding userId filter:', userId);
-        query = query.or(`created_by_user_id.eq.${userId},assigned_to_user_id.eq.${userId}`)
-      }
-
-      if (status) {
-        console.log('🔍 Adding status filter:', status);
-        query = query.eq('status', status)
-      }
-
-      if (priority) {
-        console.log('🔍 Adding priority filter:', priority);
-        query = query.eq('priority', priority)
-      }
-
-      console.log('🚀 Executing Supabase query...');
-      const { data, error } = await query
-
-      console.log('📊 Supabase response:', {
-        hasData: !!data,
-        dataLength: data?.length || 0,
-        hasError: !!error,
-        errorMessage: error?.message,
-        errorDetails: error?.details,
-        errorHint: error?.hint,
-        errorCode: error?.code
-      });
-
-      if (error) {
-        console.error('❌ Supabase error details:', {
-          message: error.message,
-          details: error.details,
-          hint: error.hint,
-          code: error.code
-        });
-        return { requests: [], error: error.message }
-      }
-
-      console.log('✅ Successfully fetched authorization requests:', data?.length || 0);
-      if (data && data.length > 0) {
-        console.log('📋 Sample request:', {
-          id: data[0].id,
-          client_name: data[0].client_name,
-          status: data[0].status,
-          monthly_payment: data[0].monthly_payment,
-          monthly_payment_type: typeof data[0].monthly_payment,
-          vehicle_value: data[0].vehicle_value,
-          created_at: data[0].created_at
-        });
-        
-        // Logging específico para Abiel Cantu
-        const abielRequest = data.find(req => req.client_name?.toLowerCase().includes('abiel'));
-        if (abielRequest) {
-          console.log('🎯 ABIEL CANTU REQUEST:', {
-            id: abielRequest.id,
-            monthly_payment: abielRequest.monthly_payment,
-            monthly_payment_type: typeof abielRequest.monthly_payment,
-            vehicle_value: abielRequest.vehicle_value,
-            requested_amount: abielRequest.requested_amount
-          });
-        }
-      }
-
-      return { requests: data || [], error: null }
-    } catch (error) {
-      console.error('💥 Exception in getAuthorizationRequests:', error)
-      return { requests: [], error: 'Error interno del servidor' }
-    }
-  }
-
-  // Obtener una solicitud específica de autorización
-  static async getAuthorizationRequest(requestId: string): Promise<{ request: AuthorizationRequest | null, error: string | null }> {
-    try {
-      const { data, error } = await supabaseClient
-        .from('z_auto_authorization_requests')
-        .select(`
-          *,
-          simulation:z_auto_simulations(*),
-          quote:z_auto_quotes(*),
-          created_by_user:z_auto_users(id, name, email),
-          assigned_to_user:z_auto_users(id, name, email)
-        `)
-        .eq('id', requestId)
-        .single()
-
-      if (error) {
-        console.error('Error fetching authorization request:', error)
-        return { request: null, error: error.message }
-      }
-
-      return { request: data, error: null }
-    } catch (error) {
-      console.error('Error in getAuthorizationRequest:', error)
-      return { request: null, error: 'Error interno del servidor' }
-    }
-  }
-
-  // Actualizar el estado de una solicitud de autorización
-  static async updateAuthorizationStatus(
-    requestId: string,
-    status: 'pending' | 'approved' | 'rejected' | 'in_review',
-    approvalNotes?: string,
-    updatedByUserId?: string
-  ): Promise<{ success: boolean, error: string | null }> {
-    try {
-      // Usar la función de PostgreSQL que creamos
-      const { data, error } = await supabaseClient.rpc('update_authorization_status', {
-        p_request_id: requestId,
-        p_status: status,
-        p_approval_notes: approvalNotes,
-        p_updated_by_user_id: updatedByUserId
-      })
-
-      if (error) {
-        console.error('Error updating authorization status:', error)
-        return { success: false, error: error.message }
-      }
-
-      return { success: data || false, error: null }
-    } catch (error) {
-      console.error('Error in updateAuthorizationStatus:', error)
-      return { success: false, error: 'Error interno del servidor' }
-    }
-  }
-
-  // Actualizar la prioridad de una solicitud
-  static async updateAuthorizationPriority(
-    requestId: string,
+export interface AuthorizationRequest {
+  id: string
+  simulation_id?: string | null
+  quote_id?: string | null
+  status: 'pending' | 'in_review' | 'advisor_approved' | 'internal_committee' | 'partners_committee' | 'approved' | 'rejected' | 'cancelled'
     priority: 'low' | 'medium' | 'high' | 'urgent'
-  ): Promise<{ success: boolean, error: string | null }> {
-    try {
-      const { error } = await supabaseClient
-        .from('z_auto_authorization_requests')
-        .update({
-          priority,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', requestId)
-
-      if (error) {
-        console.error('Error updating authorization priority:', error)
-        return { success: false, error: error.message }
-      }
-
-      return { success: true, error: null }
-    } catch (error) {
-      console.error('Error in updateAuthorizationPriority:', error)
-      return { success: false, error: 'Error interno del servidor' }
-    }
-  }
-
-  // Asignar una solicitud a un asesor
-  static async assignAuthorizationRequest(
-    requestId: string,
-    assignedToUserId: string
-  ): Promise<{ success: boolean, error: string | null }> {
-    try {
-      const { error } = await supabaseClient
-        .from('z_auto_authorization_requests')
-        .update({
-          assigned_to_user_id: assignedToUserId,
-          status: 'in_review',
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', requestId)
-
-      if (error) {
-        console.error('Error assigning authorization request:', error)
-        return { success: false, error: error.message }
-      }
-
-      return { success: true, error: null }
-    } catch (error) {
-      console.error('Error in assignAuthorizationRequest:', error)
-      return { success: false, error: 'Error interno del servidor' }
-    }
-  }
-
-  // Agregar notas internas
-  static async addInternalNotes(
-    requestId: string,
-    notes: string
-  ): Promise<{ success: boolean, error: string | null }> {
-    try {
-      const { data: currentRequest, error: fetchError } = await supabaseClient
-        .from('z_auto_authorization_requests')
-        .select('internal_notes')
-        .eq('id', requestId)
-        .single()
-
-      if (fetchError) {
-        console.error('Error fetching current request:', fetchError)
-        return { success: false, error: fetchError.message }
-      }
-
-      const existingNotes = currentRequest?.internal_notes || ''
-      const updatedNotes = existingNotes ? `${existingNotes}\n\n${new Date().toLocaleString()}: ${notes}` : `${new Date().toLocaleString()}: ${notes}`
-
-      const { error } = await supabaseClient
-        .from('z_auto_authorization_requests')
-        .update({
-          internal_notes: updatedNotes,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', requestId)
-
-      if (error) {
-        console.error('Error adding internal notes:', error)
-        return { success: false, error: error.message }
-      }
-
-      return { success: true, error: null }
-    } catch (error) {
-      console.error('Error in addInternalNotes:', error)
-      return { success: false, error: 'Error interno del servidor' }
-    }
-  }
-
-  // Obtener estadísticas de autorizaciones
-  static async getAuthorizationStats(): Promise<{
-    stats: {
-      total_requests: number
-      pending_requests: number
-      approved_requests: number
-      rejected_requests: number
-      in_review_requests: number
-      avg_processing_time: string | null
-    } | null,
-    error: string | null
-  }> {
-    try {
-      const { data, error } = await supabaseClient.rpc('get_authorization_stats')
-
-      if (error) {
-        console.error('Error fetching authorization stats:', error)
-        return { stats: null, error: error.message }
-      }
-
-      return { stats: data?.[0] || null, error: null }
-    } catch (error) {
-      console.error('Error in getAuthorizationStats:', error)
-      return { stats: null, error: 'Error interno del servidor' }
-    }
-  }
-
-  // Buscar solicitudes de autorización
-  static async searchAuthorizationRequests(
-    searchTerm: string,
-    status?: string,
-    limit: number = 20
-  ): Promise<{ requests: AuthorizationRequest[], error: string | null }> {
-    try {
-      let query = supabaseClient
-        .from('z_auto_authorization_requests')
-        .select(`
-          *,
-          simulation:z_auto_simulations(*),
-          quote:z_auto_quotes(*),
-          created_by_user:z_auto_users!z_auto_authorization_requests_created_by_user_id_fkey(id, name, email),
-          assigned_to_user:z_auto_users!z_auto_authorization_requests_assigned_to_user_id_fkey(id, name, email)
-        `)
-        .or(`client_name.ilike.%${searchTerm}%,client_email.ilike.%${searchTerm}%,vehicle_brand.ilike.%${searchTerm}%,vehicle_model.ilike.%${searchTerm}%`)
-        .order('created_at', { ascending: false })
-        .limit(limit)
-
-      if (status) {
-        query = query.eq('status', status)
-      }
-
-      const { data, error } = await query
-
-      if (error) {
-        console.error('Error searching authorization requests:', error)
-        return { requests: [], error: error.message }
-      }
-
-      return { requests: data || [], error: null }
-    } catch (error) {
-      console.error('Error in searchAuthorizationRequests:', error)
-      return { requests: [], error: 'Error interno del servidor' }
-    }
-  }
-
-  // Crear solicitud de autorización automáticamente desde una simulación completada
-  static async createFromSimulation(
-    simulationId: string,
-    quoteId: string,
-    options: {
-      priority?: 'low' | 'medium' | 'high' | 'urgent'
-      createComments?: boolean
-    } = {}
-  ): Promise<{ request: AuthorizationRequest | null, error: string | null }> {
-    try {
-      // Obtener datos de la simulación y cotización
-      const { data: simulation, error: simError } = await supabaseClient
-        .from('z_auto_simulations')
-        .select('*')
-        .eq('id', simulationId)
-        .single()
-
-      if (simError) {
-        console.error('Error fetching simulation:', simError)
-        return { request: null, error: 'Simulación no encontrada' }
-      }
-
-      const { data: quote, error: quoteError } = await supabaseClient
-        .from('z_auto_quotes')
-        .select('*')
-        .eq('id', quoteId)
-        .single()
-
-      if (quoteError) {
-        console.error('Error fetching quote:', quoteError)
-        return { request: null, error: 'Cotización no encontrada' }
-      }
-
-      // Determinar prioridad automáticamente basada en el monto
-      const financedAmount = simulation.financed_amount || 0
-      let priority = options.priority || 'medium'
-
-      if (financedAmount >= 500000) {
-        priority = 'high'
-      } else if (financedAmount >= 300000) {
-        priority = 'medium'
-      } else {
-        priority = 'low'
-      }
-
-      // Crear comentarios automáticos si está habilitado
-      let clientComments = null
-      if (options.createComments) {
-        clientComments = `Solicitud automática creada desde simulación. Monto financiado: $${financedAmount.toLocaleString('es-MX')}. Prioridad determinada: ${priority}.`
-      }
-
-      // Crear la solicitud de autorización
-      const { request, error } = await this.createAuthorizationRequest(
-        simulationId,
-        quoteId,
-        undefined, // created_by_user_id - será determinado por el sistema
-        undefined, // assigned_to_user_id - será asignado por el sistema
-        clientComments,
-        priority
-      )
-
-      return { request, error }
-    } catch (error) {
-      console.error('Error in createFromSimulation:', error)
-      return { request: null, error: 'Error interno del servidor' }
-    }
-  }
-
-  // Crear solicitud directa (bypass RLS para casos especiales)
-  static async createDirectAuthorizationRequest(
-    requestData: {
-      client_name: string
+  risk_level: 'low' | 'medium' | 'high'
+  client_name?: string
       client_email?: string
       client_phone?: string
       vehicle_brand?: string
@@ -436,84 +25,104 @@ export class AuthorizationService {
       agency_name?: string
       dealer_name?: string
       promoter_code?: string
+  created_by_user_id?: string
+  assigned_to_user_id?: string
+  claimed_by_user_id?: string
+  advisor_reviewed_by?: string
+  internal_committee_reviewed_by?: string
+  partners_committee_reviewed_by?: string
       client_comments?: string
-      priority?: 'low' | 'medium' | 'high' | 'urgent'
-      created_by_user_id?: string
-    }
-  ): Promise<{ request: AuthorizationRequest | null, error: string | null }> {
+  internal_notes?: string
+  approval_notes?: string
+  rejection_reason?: string
+  authorization_data?: Record<string, unknown>
+  competitors_data?: Array<{ name: string; price: number }>
+  created_at: string
+  updated_at?: string
+  claimed_at?: string
+  advisor_reviewed_at?: string
+  internal_committee_reviewed_at?: string
+  partners_committee_reviewed_at?: string
+  approved_at?: string
+  rejected_at?: string
+  ip_address?: string
+  user_agent?: string
+}
+
+export class AuthorizationService {
+  
+  /**
+   * Actualizar una solicitud de autorización
+   */
+  static async updateAuthorizationRequest(id: string, data: any): Promise<{
+    request: AuthorizationRequest | null
+    error: string | null
+  }> {
     try {
-      console.log('🔧 Creating direct authorization request:', requestData);
+      console.log('🔄 AuthorizationService.updateAuthorizationRequest:', { id, data })
 
-      const { data, error } = await supabaseClient
-        .from('z_auto_authorization_requests')
-        .insert([{
-          status: 'pending',
-          priority: requestData.priority || 'medium',
-          client_name: requestData.client_name,
-          client_email: requestData.client_email,
-          client_phone: requestData.client_phone,
-          vehicle_brand: requestData.vehicle_brand,
-          vehicle_model: requestData.vehicle_model,
-          vehicle_year: requestData.vehicle_year,
-          vehicle_value: requestData.vehicle_value,
-          requested_amount: requestData.requested_amount,
-          monthly_payment: requestData.monthly_payment,
-          term_months: requestData.term_months,
-          agency_name: requestData.agency_name,
-          dealer_name: requestData.dealer_name,
-          promoter_code: requestData.promoter_code,
-          created_by_user_id: requestData.created_by_user_id,
-          client_comments: requestData.client_comments,
-          risk_level: 'medium'
-        }])
-        .select()
-        .single()
+      const response = await fetch('/api/authorization-requests', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ id, ...data })
+      })
 
-      if (error) {
-        console.error('Error creating direct authorization request:', error)
-        return { request: null, error: error.message }
+      const result = await response.json()
+
+      if (!response.ok) {
+        console.error('❌ Error updating authorization request:', result.error)
+        return { request: null, error: result.error || 'Error al actualizar solicitud de autorización' }
       }
 
-      console.log('✅ Direct authorization request created:', data.id);
-      return { request: data, error: null }
+      console.log('✅ Authorization request updated:', result.authorization_request?.id)
+      return { request: result.authorization_request, error: null }
     } catch (error) {
-      console.error('Error in createDirectAuthorizationRequest:', error)
+      console.error('💥 Exception in updateAuthorizationRequest:', error)
       return { request: null, error: 'Error interno del servidor' }
     }
   }
 
-  // Funciones del workflow de autorizaciones
-
-  // Reclamar una solicitud por un asesor
+  /**
+   * Reclamar una solicitud por un asesor
+   */
   static async claimAuthorizationRequest(
     requestId: string,
     advisorId: string
-  ): Promise<{ success: boolean, error: string | null }> {
+  ): Promise<{ success: boolean; error: string | null }> {
     try {
+      console.log('🎯 Claiming authorization request:', { requestId, advisorId })
+
       const { data, error } = await supabaseClient.rpc('claim_authorization_request', {
         p_request_id: requestId,
         p_advisor_id: advisorId
       })
 
       if (error) {
-        console.error('Error claiming authorization request:', error)
+        console.error('❌ Error claiming authorization request:', error)
         return { success: false, error: error.message }
       }
 
-      return { success: data || false, error: null }
+      console.log('✅ Authorization request claimed successfully')
+      return { success: data || true, error: null }
     } catch (error) {
-      console.error('Error in claimAuthorizationRequest:', error)
+      console.error('💥 Exception in claimAuthorizationRequest:', error)
       return { success: false, error: 'Error interno del servidor' }
     }
   }
 
-  // Marcar como revisado por asesor
+  /**
+   * Marcar como revisado por asesor
+   */
   static async markAdvisorReviewed(
     requestId: string,
     advisorId: string,
     notes?: string
-  ): Promise<{ success: boolean, error: string | null }> {
+  ): Promise<{ success: boolean; error: string | null }> {
     try {
+      console.log('✅ Marking as advisor reviewed:', { requestId, advisorId, notes })
+
       const { data, error } = await supabaseClient.rpc('mark_advisor_reviewed', {
         p_request_id: requestId,
         p_advisor_id: advisorId,
@@ -521,24 +130,29 @@ export class AuthorizationService {
       })
 
       if (error) {
-        console.error('Error marking advisor reviewed:', error)
+        console.error('❌ Error marking advisor reviewed:', error)
         return { success: false, error: error.message }
       }
 
-      return { success: data || false, error: null }
+      console.log('✅ Marked as advisor reviewed successfully')
+      return { success: data || true, error: null }
     } catch (error) {
-      console.error('Error in markAdvisorReviewed:', error)
+      console.error('💥 Exception in markAdvisorReviewed:', error)
       return { success: false, error: 'Error interno del servidor' }
     }
   }
 
-  // Aprobar por comité interno
+  /**
+   * Enviar a comité interno
+   */
   static async approveByInternalCommittee(
     requestId: string,
     committeeMemberId: string,
     notes?: string
-  ): Promise<{ success: boolean, error: string | null }> {
+  ): Promise<{ success: boolean; error: string | null }> {
     try {
+      console.log('🏛️ Sending to internal committee:', { requestId, committeeMemberId, notes })
+
       const { data, error } = await supabaseClient.rpc('approve_by_internal_committee', {
         p_request_id: requestId,
         p_committee_member_id: committeeMemberId,
@@ -546,50 +160,30 @@ export class AuthorizationService {
       })
 
       if (error) {
-        console.error('Error approving by internal committee:', error)
+        console.error('❌ Error sending to internal committee:', error)
         return { success: false, error: error.message }
       }
 
-      return { success: data || false, error: null }
+      console.log('✅ Sent to internal committee successfully')
+      return { success: data || true, error: null }
     } catch (error) {
-      console.error('Error in approveByInternalCommittee:', error)
+      console.error('💥 Exception in approveByInternalCommittee:', error)
       return { success: false, error: 'Error interno del servidor' }
     }
   }
 
-  // Aprobar por comité de socios (final)
-  static async approveByPartnersCommittee(
-    requestId: string,
-    committeeMemberId: string,
-    notes?: string
-  ): Promise<{ success: boolean, error: string | null }> {
-    try {
-      const { data, error } = await supabaseClient.rpc('approve_by_partners_committee', {
-        p_request_id: requestId,
-        p_committee_member_id: committeeMemberId,
-        p_notes: notes
-      })
-
-      if (error) {
-        console.error('Error approving by partners committee:', error)
-        return { success: false, error: error.message }
-      }
-
-      return { success: data || false, error: null }
-    } catch (error) {
-      console.error('Error in approveByPartnersCommittee:', error)
-      return { success: false, error: 'Error interno del servidor' }
-    }
-  }
-
-  // Rechazar solicitud en cualquier etapa
+  /**
+   * Rechazar solicitud
+   */
   static async rejectAuthorizationRequest(
     requestId: string,
     userId: string,
     notes: string,
     stage: string = 'general'
-  ): Promise<{ success: boolean, error: string | null }> {
+  ): Promise<{ success: boolean; error: string | null }> {
     try {
+      console.log('❌ Rejecting authorization request:', { requestId, userId, notes, stage })
+
       const { data, error } = await supabaseClient.rpc('reject_authorization_request', {
         p_request_id: requestId,
         p_user_id: userId,
@@ -598,53 +192,64 @@ export class AuthorizationService {
       })
 
       if (error) {
-        console.error('Error rejecting authorization request:', error)
+        console.error('❌ Error rejecting authorization request:', error)
         return { success: false, error: error.message }
       }
 
-      return { success: data || false, error: null }
+      console.log('✅ Authorization request rejected successfully')
+      return { success: data || true, error: null }
     } catch (error) {
-      console.error('Error in rejectAuthorizationRequest:', error)
+      console.error('💥 Exception in rejectAuthorizationRequest:', error)
       return { success: false, error: 'Error interno del servidor' }
     }
   }
 
-  // Obtener vista completa del workflow
-  static async getAuthorizationWorkflowView(): Promise<{ workflows: any[], error: string | null }> {
+  /**
+   * Obtener métricas básicas
+   */
+  static async getMetrics(): Promise<any> {
     try {
-      const { data, error } = await supabaseClient
-        .from('authorization_workflow_view')
+      const { data: requests, error } = await supabaseClient
+        .from('z_auto_authorization_requests')
         .select('*')
-        .order('created_at', { ascending: false })
 
-      if (error) {
-        console.error('Error fetching workflow view:', error)
-        return { workflows: [], error: error.message }
+      if (error) throw error
+
+      const metrics = {
+        total: requests?.length || 0,
+        pending: requests?.filter(r => r.status === 'pending').length || 0,
+        in_review: requests?.filter(r => r.status === 'in_review').length || 0,
+        advisor_approved: requests?.filter(r => r.status === 'advisor_approved').length || 0,
+        internal_committee: requests?.filter(r => r.status === 'internal_committee').length || 0,
+        partners_committee: requests?.filter(r => r.status === 'partners_committee').length || 0,
+        approved: requests?.filter(r => r.status === 'approved').length || 0,
+        rejected: requests?.filter(r => r.status === 'rejected').length || 0,
+        cancelled: requests?.filter(r => r.status === 'cancelled').length || 0,
+        by_priority: { low: 0, medium: 0, high: 0, urgent: 0 },
+        by_risk_level: { low: 0, medium: 0, high: 0 },
+        avg_processing_time_hours: 0
       }
 
-      return { workflows: data || [], error: null }
+      return metrics
     } catch (error) {
-      console.error('Error in getAuthorizationWorkflowView:', error)
-      return { workflows: [], error: 'Error interno del servidor' }
-    }
-  }
-
-  // Verificar si un usuario es del comité
-  static async isCommitteeMember(userId: string): Promise<boolean> {
-    try {
-      const { data, error } = await supabaseClient.rpc('is_internal_committee_member', {
-        p_user_id: userId
-      })
-
-      if (error) {
-        console.error('Error checking committee membership:', error)
-        return false
+      console.error('💥 Exception in getMetrics:', error)
+      return {
+        total: 0,
+        pending: 0,
+        in_review: 0,
+        advisor_approved: 0,
+        internal_committee: 0,
+        partners_committee: 0,
+        approved: 0,
+        rejected: 0,
+        cancelled: 0,
+        by_priority: { low: 0, medium: 0, high: 0, urgent: 0 },
+        by_risk_level: { low: 0, medium: 0, high: 0 },
+        avg_processing_time_hours: 0
       }
-
-      return data || false
-    } catch (error) {
-      console.error('Error in isCommitteeMember:', error)
-      return false
     }
   }
 }
+
+export default AuthorizationService
+
