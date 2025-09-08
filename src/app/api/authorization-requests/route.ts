@@ -238,10 +238,9 @@ export async function PUT(request: NextRequest) {
       has_authorization_data: !!updateData.authorization_data,
       authorization_data_keys: updateData.authorization_data ? Object.keys(updateData.authorization_data) : 'N/A',
       month_labels_in_update: updateData.authorization_data?.month_labels,
-      month_labels_type: typeof updateData.authorization_data?.month_labels,
-      full_update_data: updateData
+      month_labels_type: typeof updateData.authorization_data?.month_labels
     })
-    
+
     if (!id) {
       return NextResponse.json(
         { error: 'ID de solicitud requerido para actualización' },
