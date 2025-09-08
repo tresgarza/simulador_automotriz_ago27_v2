@@ -188,6 +188,19 @@ export async function GET(request: NextRequest) {
       )
     }
 
+    // Debug: Verificar authorization_data en las solicitudes
+    console.log('📋 Solicitudes obtenidas:', requests?.length || 0)
+    if (requests && requests.length > 0) {
+      console.log('🔍 DEBUG authorization_data en primera solicitud:', {
+        id: requests[0].id,
+        has_authorization_data: !!requests[0].authorization_data,
+        authorization_data_type: typeof requests[0].authorization_data,
+        authorization_data_keys: requests[0].authorization_data ? Object.keys(requests[0].authorization_data) : 'N/A',
+        month_labels: requests[0].authorization_data?.month_labels,
+        authorization_data_sample: JSON.stringify(requests[0].authorization_data, null, 2).substring(0, 500)
+      })
+    }
+
     return NextResponse.json({
       success: true,
       authorization_requests: requests || [],
