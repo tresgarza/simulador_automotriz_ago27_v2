@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { exportScheduleXLSX } from "@/csv/export";
 import { formatMXN } from "@/lib/utils";
 import { generateProfessionalPDF } from "@/components/pdf/ProfessionalPDFGenerator";
-import { useAuth } from "../../../lib/auth";
+import { useAuth, AuthService } from "../../../lib/auth";
 import { AuthorizationService } from "../../../lib/authorization-service";
 import { AuthorizationForm } from "../authorization/AuthorizationForm";
 
@@ -37,7 +37,7 @@ type ApiResult = {
   }>;
 };
 
-type Term = 24 | 36 | 48;
+type Term = 24 | 36 | 48 | 60;
 type MatrixResult = {
   A: Record<Term, ApiResult>;
   B: Record<Term, ApiResult>;
@@ -100,7 +100,8 @@ const tierConfig = [
 const termLabels: Record<Term, string> = {
   24: "24 meses",
   36: "36 meses", 
-  48: "48 meses"
+  48: "48 meses",
+  60: "60 meses"
 };
 
 // Animated Counter Component with smooth count-up animation
@@ -501,7 +502,7 @@ Será revisada por un asesor.`);
 
       {/* Term Selection */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
-        {([24, 36, 48] as Term[]).map((term) => (
+        {(AuthService.getAvailableTerms() as Term[]).map((term) => (
           <button
             key={term}
             onClick={() => setSelectedTerm(term)}

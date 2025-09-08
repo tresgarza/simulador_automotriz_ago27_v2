@@ -105,10 +105,12 @@ const AgencyFormSchemaBase = BaseFormSchemaCore.extend({
     .max(20, "El teléfono no puede exceder 20 caracteres")
     .regex(/^[\d\s\-\+\(\)]+$/, "El teléfono solo puede contener números, espacios, guiones, paréntesis y el símbolo +"),
   client_email: z.string()
-    .email("Email inválido")
     .max(100, "El email no puede exceder 100 caracteres")
     .optional()
-    .or(z.literal("")),
+    .or(z.literal(""))
+    .refine((val) => !val || z.string().email().safeParse(val).success, {
+      message: "Email inválido"
+    }),
 
   // Campo de vendedor para agencias
   vendor_name: z.string().optional(),
@@ -223,6 +225,24 @@ export function EnhancedQuoteForm({ onSubmit, isSubmitting, hasResults = false }
     return ClientFormSchema;
   };
 
+  // Función para obtener valores por defecto según el tipo de usuario
+  const getDefaultValues = () => {
+    const baseVehicleValue = 405900;
+    const downPaymentPercent = user?.user_type === 'asesor' ? 0.45 : 0.3; // 45% para asesores, 30% para otros
+    
+    return {
+      vehicle_value: baseVehicleValue,
+      down_payment_amount: Math.round(baseVehicleValue * downPaymentPercent),
+      insurance_mode: "financed",
+      insurance_amount: 19500,
+      commission_mode: "financed",
+      // NO pre-llenar datos del usuario para agencias - ellas capturan datos del cliente
+      client_name: "",
+      client_phone: "",
+      client_email: "",
+    };
+  };
+
   const {
     register,
     handleSubmit,
@@ -231,17 +251,7 @@ export function EnhancedQuoteForm({ onSubmit, isSubmitting, hasResults = false }
     formState: { errors },
   } = useForm<any>({
     resolver: zodResolver(getFormSchema()),
-    defaultValues: {
-      vehicle_value: 405900,
-      down_payment_amount: Math.round(405900 * 0.3),
-      insurance_mode: "financed",
-      insurance_amount: 19500,
-      commission_mode: "financed",
-      // NO pre-llenar datos del usuario para agencias - ellas capturan datos del cliente
-      client_name: "",
-      client_phone: "",
-      client_email: "",
-    },
+    defaultValues: getDefaultValues(),
   });
 
   const insuranceMode = watch("insurance_mode") as string;

@@ -6,7 +6,7 @@ import { SummaryCard } from "@/components/summary/SummaryCard";
 import { LoginModal } from "@/components/auth/LoginModal";
 import { UserMenu } from "@/components/auth/UserMenu";
 import { AsesorDashboard } from "@/components/dashboard/AsesorDashboard";
-import { useAuth } from "../../lib/auth";
+import { useAuth, AuthService } from "../../lib/auth";
 import { LogIn, User, BarChart3 } from "lucide-react";
 
 type ApiResult = {
@@ -37,7 +37,7 @@ type ApiResult = {
   }[];
 };
 
-type Term = 24 | 36 | 48;
+type Term = 24 | 36 | 48 | 60;
 type MatrixResult = {
   A: Record<Term, ApiResult>;
   B: Record<Term, ApiResult>;
@@ -204,9 +204,10 @@ export default function Home() {
         setCurrentQuoteId(quoteId);
       }
 
-      // Obtener tasas disponibles según el tipo de usuario
+      // Obtener tasas y términos disponibles según el tipo de usuario
       const availableRates = getAvailableRates();
-      const terms: Term[] = [24, 36, 48];
+      const availableTerms = AuthService.getAvailableTerms();
+      const terms: Term[] = availableTerms as Term[];
       
       const tierPromises = availableRates.map(async (tier) => {
         const termResults = await Promise.all(

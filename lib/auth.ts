@@ -145,6 +145,29 @@ export class AuthService {
     
     return ['C']
   }
+
+  // Obtener términos disponibles según el tipo de usuario
+  static getAvailableTerms(): number[] {
+    if (typeof window === 'undefined') {
+      return [24, 36, 48] // Default para SSR
+    }
+    
+    const user = AuthService.getCurrentUser()
+    
+    if (!user || user.user_type === 'client') {
+      return [24, 36, 48] // Sin 60 meses para clientes
+    }
+    
+    if (user.user_type === 'agency') {
+      return [24, 36, 48] // Sin 60 meses para agencias
+    }
+    
+    if (user.user_type === 'asesor') {
+      return [24, 36, 48, 60] // Todas las opciones para asesores
+    }
+    
+    return [24, 36, 48]
+  }
 }
 
 // Hook para usar en componentes React
