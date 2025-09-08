@@ -228,9 +228,62 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
     return months;
   };
   
-  const [monthLabels, setMonthLabels] = useState(
-    (request as any).authorization_data?.month_labels || getCurrentMonths()
-  );
+  // Usar localStorage como fuente de verdad temporal para los meses
+  const getStoredMonths = () => {
+    if (typeof window !== 'undefined') {
+      const stored = localStorage.getItem(`months_${request.id}`);
+      if (stored) {
+        try {
+          return JSON.parse(stored);
+        } catch (e) {
+          console.warn('Error parsing stored months:', e);
+        }
+      }
+    }
+    return (request as any).authorization_data?.month_labels || getCurrentMonths();
+  };
+
+  const [monthLabels, setMonthLabels] = useState(getStoredMonths());
+
+  // Debug: Verificar qué month_labels se están cargando
+  console.log('🔍 DEBUG: Cargando month_labels:', {
+    request_id: request.id,
+    from_localStorage: typeof window !== 'undefined' ? localStorage.getItem(`months_${request.id}`) : null,
+    from_request: (request as any).authorization_data?.month_labels,
+    final_used: monthLabels
+  });
+
+  // Función para actualizar meses y guardar en localStorage y base de datos
+  const updateMonthLabels = async (newMonths: string[]) => {
+    setMonthLabels(newMonths);
+    
+    // Guardar en localStorage inmediatamente
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(`months_${request.id}`, JSON.stringify(newMonths));
+    }
+    
+    // Guardar en base de datos en segundo plano
+    try {
+      const updateData = {
+        id: request.id,
+        authorization_data: {
+          ...(request as any).authorization_data,
+          month_labels: newMonths,
+          auto_saved_at: new Date().toISOString()
+        }
+      };
+      
+      await fetch('/api/authorization-requests', {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updateData)
+      });
+      
+      console.log('💾 Month labels sincronizados con BD:', newMonths);
+    } catch (error) {
+      console.error('❌ Error sincronizando month labels:', error);
+    }
+  };
 
   // Generar opciones de meses para los selectores
   const generateMonthOptions = () => {
@@ -249,14 +302,6 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
   };
 
   const monthOptions = generateMonthOptions();
-  
-  // Auto-guardar cuando cambien los monthLabels
-  useEffect(() => {
-    if (monthLabels.length > 0) {
-      const currentData = watch();
-      autoSaveForm(currentData, false); // false para no mostrar estado de guardado en cada cambio
-    }
-  }, [monthLabels, autoSaveForm, watch]);
   
   // Estados para auto-guardado
   const [isAutoSaving, setIsAutoSaving] = useState(false);
@@ -402,7 +447,7 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
         competitors_data: data.competitors || [],
         authorization_data: {
           ...data,
-          month_labels: monthLabels, // Guardar los nombres de meses personalizados
+          month_labels: data.month_labels || monthLabels, // Usar los meses del parámetro si existen, sino los del estado
           auto_saved_at: new Date().toISOString()
         },
         ...statusUpdate // Aplicar cambio de estado si es necesario
@@ -440,6 +485,16 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
       }
     }
   }, [request.id]);
+
+  // Limpiar localStorage cuando se cierre el formulario
+  const handleClose = () => {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem(`months_${request.id}`);
+    }
+    onClose();
+  };
+  
+  // Nota: Auto-guardado se maneja directamente en los onChange de los selectores
 
   const handleFormChange = useCallback((data: any) => {
     const dataString = JSON.stringify(data);
@@ -493,9 +548,19 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
       if (success) {
         setSaveStatus('saved');
         setLastSaved(new Date());
+        
+        // Limpiar localStorage ya que se guardó exitosamente
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem(`months_${request.id}`);
+        }
+        
+        // Mostrar mensaje de éxito y cerrar después de un breve delay
+        console.log('✅ Autorización finalizada exitosamente');
+        alert('✅ Autorización finalizada y guardada exitosamente');
+        
         setTimeout(() => {
-          onClose();
-        }, 1000);
+          handleClose();
+        }, 500);
       }
     } catch (error) {
       setSaveStatus('error');
@@ -563,7 +628,7 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
               </div>
               
               <button
-                onClick={onClose}
+                onClick={handleClose}
                 className="p-2 hover:bg-white/20 rounded-xl transition-colors"
               >
                 <X className="w-6 h-6" />
@@ -905,10 +970,11 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
                                   <td className="py-3 px-4">
                                     <select
                                       value={month}
-                                      onChange={(e) => {
+                                      onChange={async (e) => {
                                         const newMonths = [...monthLabels];
                                         newMonths[index] = e.target.value;
-                                        setMonthLabels(newMonths);
+                                        console.log('📅 Cambiando mes:', { index, from: month, to: e.target.value, newMonths });
+                                        await updateMonthLabels(newMonths);
                                       }}
                                       className="w-full text-sm font-medium text-gray-900 bg-transparent border-none focus:ring-2 focus:ring-blue-500 rounded px-2 py-1"
                                     >
@@ -1015,10 +1081,11 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
                                   <td className="py-3 px-4">
                                     <select
                                       value={month}
-                                      onChange={(e) => {
+                                      onChange={async (e) => {
                                         const newMonths = [...monthLabels];
                                         newMonths[index] = e.target.value;
-                                        setMonthLabels(newMonths);
+                                        console.log('📅 Cambiando mes (gastos):', { index, from: month, to: e.target.value, newMonths });
+                                        await updateMonthLabels(newMonths);
                                       }}
                                       className="w-full text-sm font-medium text-gray-900 bg-transparent border-none focus:ring-2 focus:ring-red-500 rounded px-2 py-1"
                                     >
@@ -1492,7 +1559,7 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
                     
                     <button
                       type="button"
-                      onClick={onClose}
+                      onClick={handleClose}
                       className="px-6 py-3 bg-gray-500 text-white rounded-xl hover:bg-gray-600 transition-colors"
                     >
                       Cancelar

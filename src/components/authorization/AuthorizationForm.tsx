@@ -314,14 +314,6 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
 
   const monthOptions = generateMonthOptions();
   
-  // Auto-guardar cuando cambien los monthLabels
-  useEffect(() => {
-    if (monthLabels.length > 0) {
-      const currentData = watch();
-      autoSaveForm(currentData, false); // false para no mostrar estado de guardado en cada cambio
-    }
-  }, [monthLabels, autoSaveForm, watch]);
-  
   // Estados para auto-guardado
   const [isAutoSaving, setIsAutoSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
@@ -532,7 +524,7 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
         competitors_data: data.competitors || [],
         authorization_data: {
           ...data,
-          month_labels: monthLabels, // Guardar los nombres de meses personalizados
+          month_labels: data.month_labels || monthLabels, // Usar los meses del parámetro si existen, sino los del estado
           auto_saved_at: new Date().toISOString()
         }
       };
@@ -572,6 +564,8 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
       }
     }
   }, [request.id, monthlyPaymentValue]);
+
+  // Nota: Auto-guardado se maneja directamente en los onChange de los selectores
 
   /**
    * Función para manejar cambios en el formulario y programar auto-guardado
@@ -685,7 +679,7 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
           comments: data.comments,
           
           // Nombres de meses personalizados por el usuario
-          month_labels: monthLabels,
+          month_labels: data.month_labels || monthLabels,
           
           // Ingresos mensuales (estructura simple)
           mes1_nomina: data.mes1_nomina,
@@ -1213,10 +1207,14 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
                               <td className="py-3 px-4">
                                 <select
                                   value={month}
-                                  onChange={(e) => {
+                                  onChange={async (e) => {
                                     const newMonths = [...monthLabels];
                                     newMonths[index] = e.target.value;
                                     setMonthLabels(newMonths);
+                                    
+                                    // Guardar inmediatamente
+                                    const currentData = watch();
+                                    await autoSaveForm({ ...currentData, month_labels: newMonths }, true);
                                   }}
                                   className="w-full text-sm font-medium text-gray-900 bg-transparent border-none focus:ring-2 focus:ring-blue-500 rounded px-2 py-1"
                                 >
@@ -1339,10 +1337,14 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
                               <td className="py-3 px-4">
                                 <select
                                   value={month}
-                                  onChange={(e) => {
+                                  onChange={async (e) => {
                                     const newMonths = [...monthLabels];
                                     newMonths[index] = e.target.value;
                                     setMonthLabels(newMonths);
+                                    
+                                    // Guardar inmediatamente
+                                    const currentData = watch();
+                                    await autoSaveForm({ ...currentData, month_labels: newMonths }, true);
                                   }}
                                   className="w-full text-sm font-medium text-gray-900 bg-transparent border-none focus:ring-2 focus:ring-red-500 rounded px-2 py-1"
                                 >
