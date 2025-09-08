@@ -421,11 +421,17 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
         competitors_data: data.competitors || [],
         authorization_data: {
           ...data,
-          month_labels: monthLabels, // Guardar los meses estáticos calculados
+          month_labels: monthLabels, // Guardar los meses del estado local
           auto_saved_at: new Date().toISOString()
         },
         ...statusUpdate // Aplicar cambio de estado si es necesario
       };
+
+      console.log('🔄 [UPDATE] Actualizando solicitud:', request.id, {
+        current_monthLabels_state: monthLabels,
+        authorization_data_month_labels: authorizationUpdate.authorization_data.month_labels,
+        data_source: 'monthLabels state'
+      });
 
       const response = await fetch('/api/authorization-requests', {
         method: 'PUT',
@@ -481,18 +487,22 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
 
   const onSubmit = async (data: AuthorizationFormData) => {
     setIsSubmitting(true);
+    console.log('🎯 FINALIZACIÓN: Enviando datos con monthLabels:', {
+      monthLabels_state: monthLabels,
+      form_data: data
+    });
     try {
       const success = await autoSaveForm(data, false);
       if (success) {
         setSaveStatus('saved');
         setLastSaved(new Date());
-        
+
         // Autorización completada exitosamente
-        
+
         // Mostrar mensaje de éxito y cerrar después de un breve delay
         console.log('✅ Autorización finalizada exitosamente');
         alert('✅ Autorización finalizada y guardada exitosamente');
-        
+
         setTimeout(() => {
           handleClose();
         }, 500);
@@ -909,7 +919,8 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
                                         const newMonths = [...monthLabels];
                                         newMonths[index] = e.target.value;
                                         setMonthLabels(newMonths);
-                                        console.log('📅 Mes cambiado (ingresos):', { index, from: month, to: e.target.value });
+                                        console.log('📅 Mes cambiado (ingresos):', { index, from: month, to: e.target.value, newMonths });
+                                        console.log('📅 Estado monthLabels actualizado:', newMonths);
                                       }}
                                       className="w-full text-sm font-medium text-gray-900 bg-white border border-gray-300 rounded px-2 py-1 focus:ring-2 focus:ring-blue-500"
                                     >
@@ -1506,6 +1517,10 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
                           type="button"
                           onClick={async () => {
                             const currentData = watch();
+                            console.log('💾 Botón GUARDAR presionado:', {
+                              current_monthLabels_state: monthLabels,
+                              form_data: currentData
+                            });
                             await autoSaveForm({ ...currentData, month_labels: monthLabels }, true);
                           }}
                           className="px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors flex items-center"
