@@ -263,17 +263,31 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
   // Estado editable para el frontend
   const [monthLabels, setMonthLabels] = useState(getInitialMonths());
 
+  // useEffect para inicializar monthLabels cuando el componente se monta
+  useEffect(() => {
+    console.log('🏗️ [MOUNT] Componente montado, inicializando monthLabels');
+    const initialMonths = getInitialMonths();
+    setMonthLabels(initialMonths);
+  }, []); // Solo se ejecuta una vez al montar
+
   // useEffect para actualizar monthLabels cuando cambian los datos del request
   useEffect(() => {
     const newMonths = getInitialMonths();
     const currentMonthsString = JSON.stringify(monthLabels);
     const newMonthsString = JSON.stringify(newMonths);
 
-    if (currentMonthsString !== newMonthsString) {
-      console.log('🔄 Actualizando monthLabels desde useEffect:', {
+    console.log('🔄 [useEffect] Verificando si monthLabels necesita actualización:', {
+      current_monthLabels: monthLabels,
+      new_months_from_backend: newMonths,
+      has_changes: currentMonthsString !== newMonthsString,
+      backend_has_month_labels: !!newMonths && newMonths.length > 0
+    });
+
+    if (currentMonthsString !== newMonthsString && newMonths && newMonths.length > 0) {
+      console.log('🔄 [useEffect] Actualizando monthLabels desde backend:', {
         from: monthLabels,
         to: newMonths,
-        reason: 'Request data changed'
+        reason: 'Backend data updated'
       });
       setMonthLabels(newMonths);
     }
