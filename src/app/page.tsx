@@ -37,7 +37,7 @@ type ApiResult = {
   }[];
 };
 
-type Term = 24 | 36 | 48 | 60;
+type Term = 24 | 36 | 48;
 type MatrixResult = {
   A: Record<Term, ApiResult>;
   B: Record<Term, ApiResult>;
@@ -206,7 +206,7 @@ export default function Home() {
 
       // Obtener tasas disponibles según el tipo de usuario
       const availableRates = getAvailableRates();
-      const terms: Term[] = [24, 36, 48, 60];
+      const terms: Term[] = [24, 36, 48];
       
       const tierPromises = availableRates.map(async (tier) => {
         const termResults = await Promise.all(
@@ -405,16 +405,6 @@ export default function Home() {
           </div>
         </div>
 
-        {/* Bottom CTA for mobile when no results */}
-        {!showResults && (
-          <div className="mt-12 text-center">
-            <div className="inline-flex items-center px-6 py-3 bg-white/10 backdrop-blur border border-white/20 rounded-2xl text-white">
-              <span className="text-sm">
-                ✨ Calcula automáticamente A, B, C × 24, 36, 48, 60 meses
-              </span>
-            </div>
-          </div>
-        )}
       </div>
 
       {/* Login Modal */}

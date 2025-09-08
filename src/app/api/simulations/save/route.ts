@@ -51,9 +51,9 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    if (![24, 36, 48, 60].includes(termMonths)) {
+    if (![24, 36, 48].includes(termMonths)) {
       return NextResponse.json(
-        { error: 'Term months debe ser 24, 36, 48 o 60' },
+        { error: 'Term months debe ser 24, 36 o 48' },
         { status: 400 }
       )
     }
