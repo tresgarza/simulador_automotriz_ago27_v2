@@ -12,7 +12,7 @@ import { formatMXN, cn } from "../../lib/utils";
 import type { AuthorizationRequest } from "../../../lib/supabase";
 
 // Función mejorada para calcular el progreso de completado del formulario
-export const calculateFormProgress = (data: any): { 
+export const calculateFormProgress = (data: Record<string, any>): { 
   percentage: number; 
   completedFields: number; 
   totalFields: number; 
@@ -910,7 +910,7 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
                                     <input
                                       key={`fecha-ingresos-${mesNum}`}
                                       type="text"
-                                      {...register(`mes${mesNum}_fecha_ingresos` as any)}
+                                      {...register(`mes${mesNum}_fecha_ingresos` as const)}
                                       placeholder="Ej: JUN 25"
                                       className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                                     />
