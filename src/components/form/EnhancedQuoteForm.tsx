@@ -228,7 +228,7 @@ export function EnhancedQuoteForm({ onSubmit, isSubmitting, hasResults = false }
   // Función para obtener valores por defecto según el tipo de usuario
   const getDefaultValues = () => {
     const baseVehicleValue = 405900;
-    const downPaymentPercent = user?.user_type === 'asesor' ? 0.45 : 0.3; // 45% para asesores, 30% para otros
+    const downPaymentPercent = 0.3; // 30% para todos los usuarios
     
     return {
       vehicle_value: baseVehicleValue,
