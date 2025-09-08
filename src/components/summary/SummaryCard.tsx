@@ -36,7 +36,7 @@ type ComparativeResult = {
   C: ApiResult;
 };
 
-type Term = 24 | 36 | 48;
+type Term = 24 | 36 | 48 | 60;
 type MatrixResult = {
   A: Record<Term, ApiResult>;
   B: Record<Term, ApiResult>;

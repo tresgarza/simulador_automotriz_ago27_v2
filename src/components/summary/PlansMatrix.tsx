@@ -7,7 +7,7 @@ import { formatMXN } from "@/lib/utils";
 import { generateProfessionalPDF } from "@/components/pdf/ProfessionalPDFGenerator";
 import { useAuth, AuthService } from "../../../lib/auth";
 import { AuthorizationService } from "../../../lib/authorization-service";
-import { AuthorizationForm } from "../authorization/AuthorizationForm";
+import { AuthorizationForm } from "../authorization/AuthorizationFormFullscreen";
 
 type ApiResult = {
   summary: {
@@ -194,10 +194,29 @@ export function PlansMatrix({
     Object.keys(result[tier as keyof MatrixResult] || {}).length > 0
   ) as ("A" | "B" | "C")[];
   
-  const [selectedTier, setSelectedTier] = useState<"A" | "B" | "C">(
-    availableTiers.length > 0 ? availableTiers[0] : "A"
-  );
+  // Función para obtener el tier por defecto según el tipo de usuario
+  const getDefaultTier = (): "A" | "B" | "C" => {
+    if (availableTiers.length === 0) return "A";
+    
+    // Para asesores, default a Tasa C (45%)
+    if (user?.user_type === 'asesor' && availableTiers.includes("C")) {
+      return "C";
+    }
+    
+    // Para otros usuarios, usar el primer tier disponible
+    return availableTiers[0];
+  };
+
+  const [selectedTier, setSelectedTier] = useState<"A" | "B" | "C">(getDefaultTier());
   const [selectedTerm, setSelectedTerm] = useState<Term>(48);
+
+  // Actualizar tier seleccionado cuando cambien los datos disponibles
+  useEffect(() => {
+    const defaultTier = getDefaultTier();
+    if (defaultTier !== selectedTier && availableTiers.includes(defaultTier)) {
+      setSelectedTier(defaultTier);
+    }
+  }, [availableTiers, user?.user_type]);
 
   // Reset del estado cuando cambian los parámetros de simulación
   useEffect(() => {
