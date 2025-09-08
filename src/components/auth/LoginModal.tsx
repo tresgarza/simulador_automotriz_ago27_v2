@@ -111,7 +111,7 @@ export function LoginModal({ isOpen, onClose, onLoginSuccess }: LoginModalProps)
                     type="text"
                     value={asesorCode}
                     onChange={(e) => setAsesorCode(e.target.value.toUpperCase())}
-                    placeholder="FINCENTIVA2025"
+                    placeholder=""
                     className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-2xl focus:ring-4 focus:ring-emerald-300/50 focus:border-emerald-400"
                     required
                   />
