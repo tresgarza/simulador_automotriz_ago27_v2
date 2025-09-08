@@ -1,0 +1,22 @@
+# Ignorar archivos problemáticos durante el build
+*.backup.tsx
+*.backup.ts
+*.test.ts
+*.test.tsx
+*.spec.ts
+*.spec.tsx
+
+# Ignorar archivos de configuración local
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Ignorar archivos temporales
+*.tmp
+*.temp
+.DS_Store
+
+# Ignorar archivos de desarrollo
+debug.js
+server.log
