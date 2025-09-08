@@ -228,7 +228,35 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
     return months;
   };
   
-  const [monthLabels, setMonthLabels] = useState(getCurrentMonths());
+  const [monthLabels, setMonthLabels] = useState(
+    (request as any).authorization_data?.month_labels || getCurrentMonths()
+  );
+
+  // Generar opciones de meses para los selectores
+  const generateMonthOptions = () => {
+    const options = [];
+    const currentDate = new Date();
+    const monthNames = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'];
+    
+    // Generar opciones para los últimos 24 meses
+    for (let i = 23; i >= 0; i--) {
+      const date = new Date(currentDate.getFullYear(), currentDate.getMonth() - i, 1);
+      const monthName = monthNames[date.getMonth()];
+      const year = date.getFullYear().toString().slice(-2);
+      options.push(`${monthName} ${year}`);
+    }
+    return options;
+  };
+
+  const monthOptions = generateMonthOptions();
+  
+  // Auto-guardar cuando cambien los monthLabels
+  useEffect(() => {
+    if (monthLabels.length > 0) {
+      const currentData = watch();
+      autoSaveForm(currentData, false); // false para no mostrar estado de guardado en cada cambio
+    }
+  }, [monthLabels, autoSaveForm, watch]);
   
   // Estados para auto-guardado
   const [isAutoSaving, setIsAutoSaving] = useState(false);
@@ -374,6 +402,7 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
         competitors_data: data.competitors || [],
         authorization_data: {
           ...data,
+          month_labels: monthLabels, // Guardar los nombres de meses personalizados
           auto_saved_at: new Date().toISOString()
         },
         ...statusUpdate // Aplicar cambio de estado si es necesario
@@ -848,28 +877,6 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
                           <TrendingUp className="w-5 h-5 mr-2" />
                           Ingresos Mensuales Comprobables (Últimos 3 Meses)
                         </h4>
-                        <div className="flex gap-2 items-center">
-                          {monthLabels.map((month, index) => (
-                            <input
-                              key={index}
-                              type="text"
-                              value={month}
-                              onChange={(e) => {
-                                const newMonths = [...monthLabels];
-                                newMonths[index] = e.target.value;
-                                setMonthLabels(newMonths);
-                              }}
-                              className="w-16 text-xs text-center border border-blue-300 rounded px-1 py-1"
-                            />
-                          ))}
-                          <button
-                            type="button"
-                            onClick={() => setMonthLabels(getCurrentMonths())}
-                            className="text-xs text-blue-600 hover:text-blue-800 underline ml-2"
-                          >
-                            Auto
-                          </button>
-                        </div>
                       </div>
 
                       <div className="bg-white rounded-lg border overflow-hidden">
@@ -895,7 +902,21 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
 
                               return (
                                 <tr key={month} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
-                                  <td className="py-3 px-4 font-medium text-gray-900">{month}</td>
+                                  <td className="py-3 px-4">
+                                    <select
+                                      value={month}
+                                      onChange={(e) => {
+                                        const newMonths = [...monthLabels];
+                                        newMonths[index] = e.target.value;
+                                        setMonthLabels(newMonths);
+                                      }}
+                                      className="w-full text-sm font-medium text-gray-900 bg-transparent border-none focus:ring-2 focus:ring-blue-500 rounded px-2 py-1"
+                                    >
+                                      {monthOptions.map(option => (
+                                        <option key={option} value={option}>{option}</option>
+                                      ))}
+                                    </select>
+                                  </td>
                                   <td className="py-3 px-4">
                                     <input
                                       type="number"
@@ -968,28 +989,6 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
                           <TrendingDown className="w-5 h-5 mr-2" />
                           Gastos Mensuales Comprobables
                         </h4>
-                        <div className="flex gap-2 items-center">
-                          {monthLabels.map((month, index) => (
-                            <input
-                              key={index}
-                              type="text"
-                              value={month}
-                              onChange={(e) => {
-                                const newMonths = [...monthLabels];
-                                newMonths[index] = e.target.value;
-                                setMonthLabels(newMonths);
-                              }}
-                              className="w-16 text-xs text-center border border-red-300 rounded px-1 py-1"
-                            />
-                          ))}
-                          <button
-                            type="button"
-                            onClick={() => setMonthLabels(getCurrentMonths())}
-                            className="text-xs text-red-600 hover:text-red-800 underline ml-2"
-                          >
-                            Auto
-                          </button>
-                        </div>
                       </div>
 
                       <div className="bg-white rounded-lg border overflow-hidden">
@@ -1013,7 +1012,21 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
 
                               return (
                                 <tr key={month} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
-                                  <td className="py-3 px-4 font-medium text-gray-900">{month}</td>
+                                  <td className="py-3 px-4">
+                                    <select
+                                      value={month}
+                                      onChange={(e) => {
+                                        const newMonths = [...monthLabels];
+                                        newMonths[index] = e.target.value;
+                                        setMonthLabels(newMonths);
+                                      }}
+                                      className="w-full text-sm font-medium text-gray-900 bg-transparent border-none focus:ring-2 focus:ring-red-500 rounded px-2 py-1"
+                                    >
+                                      {monthOptions.map(option => (
+                                        <option key={option} value={option}>{option}</option>
+                                      ))}
+                                    </select>
+                                  </td>
                                   <td className="py-3 px-4">
                                     <input
                                       type="number"
