@@ -113,9 +113,9 @@ export function EnhancedQuoteForm({ onSubmit, isSubmitting, hasResults = false }
     defaultValues: {
       vehicle_value: 405900,
       down_payment_amount: Math.round(405900 * 0.3),
-      insurance_mode: "cash",
+      insurance_mode: "financed",
       insurance_amount: 19500,
-      commission_mode: "cash",
+      commission_mode: "financed",
       // Pre-llenar datos del usuario si está logueado
       client_name: user?.name || "",
       client_phone: user?.phone || "",

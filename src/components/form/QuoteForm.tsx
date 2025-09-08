@@ -55,9 +55,9 @@ export function QuoteForm({ onSubmit, isSubmitting, hasResults = false }: QuoteF
     defaultValues: {
       vehicle_value: 405900,
       down_payment_amount: Math.round(405900 * 0.3),
-      insurance_mode: "cash",
+      insurance_mode: "financed",
       insurance_amount: 19500,
-      commission_mode: "cash",
+      commission_mode: "financed",
     },
   });
 
