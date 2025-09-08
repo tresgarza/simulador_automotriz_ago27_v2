@@ -277,42 +277,6 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
   const [step, setStep] = useState(1);
   const totalSteps = 3;
   
-  // Calcular los 3 meses anteriores dinámicamente
-  const getCurrentMonths = () => {
-    const now = new Date();
-    const months = [];
-    const monthNames = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'];
-    
-    for (let i = 3; i >= 1; i--) {
-      const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const monthName = monthNames[date.getMonth()];
-      const year = date.getFullYear().toString().slice(-2);
-      months.push(`${monthName} ${year}`);
-    }
-    return months;
-  };
-  
-  // Usar meses estáticos basados en la fecha de creación de la solicitud
-  const getStaticMonths = () => {
-    if ((request as any).authorization_data?.month_labels) {
-      return (request as any).authorization_data.month_labels;
-    }
-    
-    const createdAt = new Date(request.created_at || new Date());
-    const months = [];
-    const monthNames = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'];
-    
-    for (let i = 3; i >= 1; i--) {
-      const date = new Date(createdAt.getFullYear(), createdAt.getMonth() - i, 1);
-      const monthName = monthNames[date.getMonth()];
-      const year = date.getFullYear().toString().slice(-2);
-      months.push(`${monthName} ${year}`);
-    }
-    return months;
-  };
-
-  const monthLabels = getStaticMonths();
-  
   // Estados para auto-guardado
   const [isAutoSaving, setIsAutoSaving] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
@@ -486,8 +450,7 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
     return months;
   };
 
-  // Usar los nombres de meses personalizados por el usuario
-  const lastThreeMonths = monthLabels;
+  const lastThreeMonths = generateLastThreeMonths();
 
   // =========================================
   // FUNCIONES DE AUTO-GUARDADO
@@ -523,7 +486,6 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
         competitors_data: data.competitors || [],
         authorization_data: {
           ...data,
-          month_labels: data.month_labels || monthLabels, // Usar los meses del parámetro si existen, sino los del estado
           auto_saved_at: new Date().toISOString()
         }
       };
@@ -563,8 +525,6 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
       }
     }
   }, [request.id, monthlyPaymentValue]);
-
-  // Nota: Auto-guardado se maneja directamente en los onChange de los selectores
 
   /**
    * Función para manejar cambios en el formulario y programar auto-guardado
@@ -676,9 +636,6 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
           monthly_capacity: data.monthly_capacity,
           monthly_discount: data.monthly_discount,
           comments: data.comments,
-          
-          // Nombres de meses personalizados por el usuario
-          month_labels: data.month_labels || monthLabels,
           
           // Ingresos mensuales (estructura simple)
           mes1_nomina: data.mes1_nomina,
@@ -1171,7 +1128,7 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
                 <div className="bg-blue-50 border border-blue-200 rounded-xl p-6">
                   <h4 className="text-lg font-semibold text-blue-800 mb-4 flex items-center">
                     <TrendingUp className="w-5 h-5 mr-2" />
-                    Ingresos Mensuales Comprobables (Últimos 3 Meses)
+                    Ingresos Mensuales Comprobables
                   </h4>
 
                   <div className="bg-white rounded-lg border overflow-hidden">

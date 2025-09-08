@@ -161,6 +161,14 @@ const AuthorizationSchema = z.object({
   monthly_discount: z.coerce.number().min(0, "El descuento mensual no puede ser negativo"),
   comments: z.string().optional(),
   
+  // Fechas personalizables por mes (separadas para ingresos y gastos)
+  mes1_fecha_ingresos: z.string().optional(),
+  mes2_fecha_ingresos: z.string().optional(),
+  mes3_fecha_ingresos: z.string().optional(),
+  mes1_fecha_gastos: z.string().optional(),
+  mes2_fecha_gastos: z.string().optional(),
+  mes3_fecha_gastos: z.string().optional(),
+
   // Ingresos por mes
   mes1_nomina: z.coerce.number().min(0).optional(),
   mes1_comisiones: z.coerce.number().min(0).optional(),
@@ -213,110 +221,8 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
   const [step, setStep] = useState(1);
   const totalSteps = 3;
   
-  // Calcular los 3 meses anteriores dinámicamente
-  const getCurrentMonths = () => {
-    const now = new Date();
-    const months = [];
-    const monthNames = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'];
-    
-    for (let i = 3; i >= 1; i--) {
-      const date = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const monthName = monthNames[date.getMonth()];
-      const year = date.getFullYear().toString().slice(-2);
-      months.push(`${monthName} ${year}`);
-    }
-    return months;
-  };
-  
-  // SOLUCIÓN HÍBRIDA: Editable en frontend, estable en backend
-  const getInitialMonths = () => {
-    console.log('🔍 DEBUG getInitialMonths - request object:', {
-      request_id: request.id,
-      has_authorization_data: !!(request as any).authorization_data,
-      authorization_data_keys: Object.keys((request as any).authorization_data || {}),
-      month_labels_in_request: (request as any).authorization_data?.month_labels,
-      created_at: request.created_at
-    });
-
-    // Prioridad 1: Cargar meses guardados en authorization_data
-    if ((request as any).authorization_data?.month_labels) {
-      console.log('✅ Usando month_labels guardados:', (request as any).authorization_data.month_labels);
-      return (request as any).authorization_data.month_labels;
-    }
-
-    console.log('⚠️ No hay month_labels guardados, usando valores por defecto');
-
-    // Valores por defecto basados en fecha de creación
-    const createdAt = new Date(request.created_at || new Date());
-    const months = [];
-    const monthNames = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'];
-
-    for (let i = 3; i >= 1; i--) {
-      const date = new Date(createdAt.getFullYear(), createdAt.getMonth() - i, 1);
-      const monthName = monthNames[date.getMonth()];
-      const year = date.getFullYear().toString().slice(-2);
-      months.push(`${monthName} ${year}`);
-    }
-    return months;
-  };
-
-  // Estado editable para el frontend
-  const [monthLabels, setMonthLabels] = useState(getInitialMonths());
-
-  // useEffect para inicializar monthLabels cuando el componente se monta
-  useEffect(() => {
-    console.log('🏗️ [MOUNT] Componente montado, inicializando monthLabels');
-    const initialMonths = getInitialMonths();
-    setMonthLabels(initialMonths);
-  }, []); // Solo se ejecuta una vez al montar
-
-  // useEffect para actualizar monthLabels cuando cambian los datos del request
-  useEffect(() => {
-    const newMonths = getInitialMonths();
-    const currentMonthsString = JSON.stringify(monthLabels);
-    const newMonthsString = JSON.stringify(newMonths);
-
-    console.log('🔄 [useEffect] Verificando si monthLabels necesita actualización:', {
-      current_monthLabels: monthLabels,
-      new_months_from_backend: newMonths,
-      has_changes: currentMonthsString !== newMonthsString,
-      backend_has_month_labels: !!newMonths && newMonths.length > 0
-    });
-
-    if (currentMonthsString !== newMonthsString && newMonths && newMonths.length > 0) {
-      console.log('🔄 [useEffect] Actualizando monthLabels desde backend:', {
-        from: monthLabels,
-        to: newMonths,
-        reason: 'Backend data updated'
-      });
-      setMonthLabels(newMonths);
-    }
-  }, [request?.authorization_data?.month_labels, request?.created_at]);
-  
-  // Generar opciones para selectores
-  const generateMonthOptions = () => {
-    const options = [];
-    const currentDate = new Date();
-    const monthNames = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'];
-    
-    for (let i = 23; i >= 0; i--) {
-      const date = new Date(currentDate.getFullYear(), currentDate.getMonth() - i, 1);
-      const monthName = monthNames[date.getMonth()];
-      const year = date.getFullYear().toString().slice(-2);
-      options.push(`${monthName} ${year}`);
-    }
-    return options;
-  };
-
-  const monthOptions = generateMonthOptions();
-  
-  console.log('📅 Meses inicializados:', {
-    request_id: request.id,
-    initial_months: monthLabels,
-    from_saved: (request as any).authorization_data?.month_labels
-  });
-
-  // Los meses son editables y se guardan al finalizar
+  // Usar etiquetas fijas y simples
+  const [monthLabels] = useState<string[]>(['MES 1', 'MES 2', 'MES 3']);
   
   // Estados para auto-guardado
   const [isAutoSaving, setIsAutoSaving] = useState(false);
@@ -379,6 +285,14 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
       monthly_capacity: (request as any).authorization_data?.monthly_capacity || monthlyPaymentValue,
       monthly_discount: (request as any).authorization_data?.monthly_discount || monthlyPaymentValue,
       comments: (request as any).authorization_data?.comments || "",
+      
+      // Fechas personalizables por mes (separadas para ingresos y gastos)
+      mes1_fecha_ingresos: (request as any).authorization_data?.mes1_fecha_ingresos || "",
+      mes2_fecha_ingresos: (request as any).authorization_data?.mes2_fecha_ingresos || "",
+      mes3_fecha_ingresos: (request as any).authorization_data?.mes3_fecha_ingresos || "",
+      mes1_fecha_gastos: (request as any).authorization_data?.mes1_fecha_gastos || "",
+      mes2_fecha_gastos: (request as any).authorization_data?.mes2_fecha_gastos || "",
+      mes3_fecha_gastos: (request as any).authorization_data?.mes3_fecha_gastos || "",
       
       // Ingresos por mes
       mes1_nomina: (request as any).authorization_data?.mes1_nomina || undefined,
@@ -462,17 +376,10 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
         competitors_data: data.competitors || [],
         authorization_data: {
           ...data,
-          month_labels: monthLabels, // Guardar los meses del estado local
           auto_saved_at: new Date().toISOString()
         },
         ...statusUpdate // Aplicar cambio de estado si es necesario
       };
-
-      console.log('🔄 [UPDATE] Actualizando solicitud:', request.id, {
-        current_monthLabels_state: monthLabels,
-        authorization_data_month_labels: authorizationUpdate.authorization_data.month_labels,
-        data_source: 'monthLabels state'
-      });
 
       const response = await fetch('/api/authorization-requests', {
         method: 'PUT',
@@ -507,14 +414,27 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
     }
   }, [request.id]);
 
-  // Función de cierre simplificada
-  const handleClose = () => {
-    onClose();
-  };
-  
-  // Nota: Auto-guardado se maneja directamente en los onChange de los selectores
+  const handleFormChange = useCallback((data: any) => {
+    const dataString = JSON.stringify(data);
+    
+    if (dataString === lastSaveDataRef.current) {
+      return;
+    }
+    
+    lastSaveDataRef.current = dataString;
+    
+    if (autoSaveTimeoutRef.current) {
+      clearTimeout(autoSaveTimeoutRef.current);
+    }
+    
+    autoSaveTimeoutRef.current = setTimeout(() => {
+      autoSaveForm(data, true);
+    }, 3000);
+  }, [autoSaveForm]);
 
-  // Auto-guardado deshabilitado - solo guardado manual
+  useEffect(() => {
+    handleFormChange(watchedData);
+  }, [watchedData, handleFormChange]);
 
   useEffect(() => {
     return () => {
@@ -524,41 +444,63 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
     };
   }, []);
 
-  // Sin auto-guardado - solo guardado manual
+  // Soporte para Ctrl+S
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if ((event.ctrlKey || event.metaKey) && event.key === 's') {
+        event.preventDefault();
+        autoSaveForm(watchedData, true);
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [watchedData, autoSaveForm]);
 
   const onSubmit = async (data: AuthorizationFormData) => {
-    setIsSubmitting(true);
-    console.log('🎯 FINALIZACIÓN: Enviando datos con monthLabels:', {
-      monthLabels_state: monthLabels,
-      form_data: data
+    console.log('🚨 CRÍTICO: onSubmit ejecutado!', {
+      currentStep: step,
+      totalSteps,
+      shouldExecute: step === totalSteps,
+      stackTrace: new Error().stack
     });
+    
+    // SOLO ejecutar si estamos en el paso final
+    if (step !== totalSteps) {
+      console.log('🚫 SUBMIT BLOQUEADO - No estamos en el paso final');
+      return;
+    }
+    
+    setIsSubmitting(true);
     try {
+      // Solo finalizar cuando el usuario presiona el botón "Finalizar"
       const success = await autoSaveForm(data, false);
       if (success) {
         setSaveStatus('saved');
         setLastSaved(new Date());
-
-        // Autorización completada exitosamente
-
-        // Mostrar mensaje de éxito y cerrar después de un breve delay
-        console.log('✅ Autorización finalizada exitosamente');
-        alert('✅ Autorización finalizada y guardada exitosamente');
-
+        alert('✅ Autorización finalizada exitosamente');
         setTimeout(() => {
-          handleClose();
-        }, 500);
+          onClose();
+        }, 1000);
       }
     } catch (error) {
       setSaveStatus('error');
       setSaveError((error as Error).message);
+      alert('❌ Error al finalizar la autorización');
     } finally {
       setIsSubmitting(false);
     }
   };
 
   const nextStep = () => {
+    console.log('🔄 SIGUIENTE PASO - nextStep ejecutado', { currentStep: step, totalSteps });
     if (step < totalSteps) {
       setStep(step + 1);
+      console.log('✅ Paso actualizado a:', step + 1);
+    } else {
+      console.log('⚠️ Ya estás en el último paso');
     }
   };
 
@@ -614,7 +556,7 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
               </div>
               
               <button
-                onClick={handleClose}
+                onClick={onClose}
                 className="p-2 hover:bg-white/20 rounded-xl transition-colors"
               >
                 <X className="w-6 h-6" />
@@ -698,7 +640,16 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
 
         {/* Form Content */}
         <div className="flex-1 overflow-y-auto">
-          <form onSubmit={handleSubmit(onSubmit)} className="h-full flex flex-col">
+          <div 
+            onKeyDown={(e) => {
+              // Prevenir submit accidental con Enter
+              if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') {
+                e.preventDefault();
+                console.log('🚫 Enter bloqueado - no se permite submit accidental');
+              }
+            }}
+            className="h-full flex flex-col"
+          >
             <div className="flex-1 p-8 overflow-y-auto">
               <div className="max-w-6xl mx-auto space-y-8">
                 
@@ -935,6 +886,7 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
                           <thead className="bg-blue-100">
                             <tr>
                               <th className="text-left py-3 px-4 font-semibold text-blue-800">Mes</th>
+                              <th className="text-center py-3 px-4 font-semibold text-gray-700">Fecha</th>
                               <th className="text-right py-3 px-4 font-semibold text-green-700">Nómina</th>
                               <th className="text-right py-3 px-4 font-semibold text-blue-700">Comisiones</th>
                               <th className="text-right py-3 px-4 font-semibold text-purple-700">Negocio</th>
@@ -953,22 +905,15 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
 
                               return (
                                 <tr key={month} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                                  <td className="py-3 px-4 font-medium text-gray-900">{month}</td>
                                   <td className="py-3 px-4">
-                                    <select
-                                      value={month}
-                                      onChange={(e) => {
-                                        const newMonths = [...monthLabels];
-                                        newMonths[index] = e.target.value;
-                                        setMonthLabels(newMonths);
-                                        console.log('📅 Mes cambiado (ingresos):', { index, from: month, to: e.target.value, newMonths });
-                                        console.log('📅 Estado monthLabels actualizado:', newMonths);
-                                      }}
-                                      className="w-full text-sm font-medium text-gray-900 bg-white border border-gray-300 rounded px-2 py-1 focus:ring-2 focus:ring-blue-500"
-                                    >
-                                      {monthOptions.map(option => (
-                                        <option key={option} value={option}>{option}</option>
-                                      ))}
-                                    </select>
+                                    <input
+                                      key={`fecha-ingresos-${mesNum}`}
+                                      type="text"
+                                      {...register(`mes${mesNum}_fecha_ingresos` as any)}
+                                      placeholder="Ej: JUN 25"
+                                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                    />
                                   </td>
                                   <td className="py-3 px-4">
                                     <input
@@ -1012,6 +957,7 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
                           <tfoot className="bg-blue-100 border-t-2">
                             <tr>
                               <td className="py-3 px-4 font-bold text-blue-800">PROMEDIO</td>
+                              <td className="py-3 px-4"></td> {/* Celda vacía para la columna Fecha */}
                               <td className="py-3 px-4 text-right font-bold text-green-700">
                                 {formatMXN((Number(watchedData.mes1_nomina || 0) + Number(watchedData.mes2_nomina || 0) + Number(watchedData.mes3_nomina || 0)) / 3)}
                               </td>
@@ -1049,6 +995,7 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
                           <thead className="bg-red-100">
                             <tr>
                               <th className="text-left py-3 px-4 font-semibold text-red-800">Mes</th>
+                              <th className="text-center py-3 px-4 font-semibold text-gray-700">Fecha</th>
                               <th className="text-right py-3 px-4 font-semibold text-red-700">Compromisos Buró</th>
                               <th className="text-right py-3 px-4 font-semibold text-orange-700">Gastos Personales</th>
                               <th className="text-right py-3 px-4 font-semibold text-purple-700">Gastos Negocio</th>
@@ -1065,21 +1012,15 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
 
                               return (
                                 <tr key={month} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
+                                  <td className="py-3 px-4 font-medium text-gray-900">{month}</td>
                                   <td className="py-3 px-4">
-                                    <select
-                                      value={month}
-                                      onChange={(e) => {
-                                        const newMonths = [...monthLabels];
-                                        newMonths[index] = e.target.value;
-                                        setMonthLabels(newMonths);
-                                        console.log('📅 Mes cambiado (gastos):', { index, from: month, to: e.target.value });
-                                      }}
-                                      className="w-full text-sm font-medium text-gray-900 bg-white border border-gray-300 rounded px-2 py-1 focus:ring-2 focus:ring-red-500"
-                                    >
-                                      {monthOptions.map(option => (
-                                        <option key={option} value={option}>{option}</option>
-                                      ))}
-                                    </select>
+                                    <input
+                                      key={`fecha-gastos-${mesNum}`}
+                                      type="text"
+                                      {...register(`mes${mesNum}_fecha_gastos` as any)}
+                                      placeholder="Ej: JUN 25"
+                                      className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500"
+                                    />
                                   </td>
                                   <td className="py-3 px-4">
                                     <input
@@ -1115,6 +1056,7 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
                           <tfoot className="bg-red-100 border-t-2">
                             <tr>
                               <td className="py-3 px-4 font-bold text-red-800">PROMEDIO</td>
+                              <td className="py-3 px-4"></td> {/* Celda vacía para la columna Fecha */}
                               <td className="py-3 px-4 text-right font-bold text-red-700">
                                 {formatMXN((Number(watchedData.mes1_compromisos || 0) + Number(watchedData.mes2_compromisos || 0) + Number(watchedData.mes3_compromisos || 0)) / 3)}
                               </td>
@@ -1546,40 +1488,27 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
                     
                     <button
                       type="button"
-                      onClick={handleClose}
+                      onClick={onClose}
                       className="px-6 py-3 bg-gray-500 text-white rounded-xl hover:bg-gray-600 transition-colors"
                     >
                       Cancelar
                     </button>
 
                     {step < totalSteps ? (
-                      <>
-                        <button
-                          type="button"
-                          onClick={async () => {
-                            const currentData = watch();
-                            console.log('💾 Botón GUARDAR presionado:', {
-                              current_monthLabels_state: monthLabels,
-                              form_data: currentData
-                            });
-                            await autoSaveForm({ ...currentData, month_labels: monthLabels }, true);
-                          }}
-                          className="px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors flex items-center"
-                        >
-                          <Save className="w-4 h-4 mr-2" />
-                          Guardar
-                        </button>
-                        <button
-                          type="button"
-                          onClick={nextStep}
-                          className="px-6 py-3 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-colors"
-                        >
-                          Siguiente
-                        </button>
-                      </>
+                      <button
+                        type="button"
+                        onClick={nextStep}
+                        className="px-6 py-3 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-colors"
+                      >
+                        Siguiente
+                      </button>
                     ) : (
                       <button
-                        type="submit"
+                        type="button"
+                        onClick={handleSubmit((data) => {
+                          console.log('🎯 Botón FINALIZAR presionado manualmente');
+                          onSubmit(data);
+                        })}
                         disabled={isSubmitting}
                         className={cn(
                           "px-6 py-3 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-colors flex items-center",
@@ -1603,7 +1532,7 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
                 </div>
               </div>
             </div>
-          </form>
+          </div>
         </div>
       </div>
     </div>

@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { supabaseClient } from '../../../../lib/supabase'
 
+// POST - Crear nueva solicitud de autorización
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
     console.log('🔍 [DEBUG] Authorization request body:', JSON.stringify(body, null, 2))
-
+    
     const {
       simulation_id,
       quote_id,
@@ -30,10 +31,13 @@ export async function POST(request: NextRequest) {
       risk_level = 'medium',
       ip_address,
       user_agent,
+      // Datos adicionales del formulario de autorización
       authorization_data,
+      // Datos de competidores
       competitors
     } = body
 
+    // Validaciones básicas
     if (!simulation_id && !quote_id && !client_name && !vehicle_brand) {
       console.error('❌ [ERROR] Faltan campos requeridos para autorización')
       return NextResponse.json(
@@ -42,45 +46,67 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    let finalStatus = 'pending'
-    let finalAssignedUserId = assigned_to_user_id
-
-    if (created_by_user_id && !assigned_to_user_id) {
-      finalAssignedUserId = created_by_user_id
-      finalStatus = 'in_review'
+    // Lógica de auto-asignación: si un asesor crea la solicitud, se auto-asigna
+    let finalStatus = 'pending';
+    let finalAssignedToUserId = assigned_to_user_id || null;
+    
+    // Si hay created_by_user_id, verificar si es asesor y auto-asignar
+    if (created_by_user_id) {
+      try {
+        const { data: userData, error: userError } = await supabaseClient
+          .from('z_auto_users')
+          .select('user_type')
+          .eq('id', created_by_user_id)
+          .single();
+        
+        if (!userError && userData?.user_type === 'asesor') {
+          // Auto-asignar al asesor que creó la solicitud
+          finalAssignedToUserId = created_by_user_id;
+          finalStatus = 'in_review'; // Cambiar estado a "en revisión" automáticamente
+          console.log('🎯 [AUTO-ASSIGN] Asesor auto-asignado:', created_by_user_id);
+        }
+      } catch (error) {
+        console.warn('⚠️ [WARNING] Error verificando tipo de usuario para auto-asignación:', error);
+        // Continuar sin auto-asignación en caso de error
+      }
     }
 
+    // Preparar datos para inserción básica
+    const authRequestData = {
+      simulation_id: simulation_id || null,
+      quote_id: quote_id || null,
+      status: finalStatus,
+      priority,
+      client_name: client_name || 'Cliente no especificado',
+      client_email: client_email || null,
+      client_phone: client_phone || null,
+      vehicle_brand: vehicle_brand || null,
+      vehicle_model: vehicle_model || null,
+      vehicle_year: vehicle_year || null,
+      vehicle_value: vehicle_value || null,
+      requested_amount: requested_amount || null,
+      monthly_payment: monthly_payment || null,
+      term_months: term_months || null,
+      agency_name: agency_name || null,
+      dealer_name: dealer_name || null,
+      promoter_code: promoter_code || null,
+      created_by_user_id: created_by_user_id || null,
+      assigned_to_user_id: finalAssignedToUserId,
+      client_comments: client_comments || null,
+      internal_notes: internal_notes || `${internal_notes || ''}${finalAssignedToUserId === created_by_user_id ? ' [AUTO-ASIGNADO AL ASESOR CREADOR]' : ''}`.trim(),
+      risk_level,
+      ip_address: ip_address || null,
+      user_agent: user_agent || null,
+      authorization_data: authorization_data || null,
+      competitors_data: competitors || null
+    }
+
+    console.log('📝 [DEBUG] Inserting authorization request:', authRequestData)
+
+    // Insertar solicitud de autorización
     const { data: authRequest, error: authError } = await supabaseClient
       .from('z_auto_authorization_requests')
-      .insert({
-        simulation_id,
-        quote_id,
-        status: finalStatus,
-        priority,
-        client_name,
-        client_email,
-        client_phone,
-        vehicle_brand,
-        vehicle_model,
-        vehicle_year,
-        vehicle_value,
-        requested_amount,
-        monthly_payment,
-        term_months,
-        agency_name,
-        dealer_name,
-        promoter_code,
-        created_by_user_id,
-        assigned_to_user_id: finalAssignedUserId,
-        client_comments,
-        internal_notes,
-        approval_notes: null,
-        risk_level,
-        ip_address,
-        user_agent,
-        authorization_data: authorization_data || {},
-        competitors_data: competitors || []
-      })
+      .insert(authRequestData)
       .select()
       .single()
 
@@ -92,7 +118,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    console.log('✅ [SUCCESS] Authorization request created:', authRequest.id)
+    console.log('✅ [SUCCESS] Authorization request created:', authRequest)
 
     return NextResponse.json({
       success: true,
@@ -100,7 +126,7 @@ export async function POST(request: NextRequest) {
     })
 
   } catch (error) {
-    console.error('❌ [ERROR] Error en API de creación de solicitudes:', error)
+    console.error('❌ [ERROR] Error en API de solicitudes de autorización:', error)
     return NextResponse.json(
       { error: 'Error interno del servidor: ' + (error as Error).message },
       { status: 500 }
@@ -108,11 +134,13 @@ export async function POST(request: NextRequest) {
   }
 }
 
+// GET - Obtener solicitudes de autorización
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url)
     const limit = parseInt(searchParams.get('limit') || '50')
 
+    // Consulta con JOIN para obtener toda la información relacionada
     const { data: requests, error } = await supabaseClient
       .from('z_auto_authorization_requests')
       .select(`
@@ -160,28 +188,6 @@ export async function GET(request: NextRequest) {
       )
     }
 
-    console.log('📋 Solicitudes obtenidas:', requests?.length || 0)
-    if (requests && requests.length > 0) {
-      console.log('🔍 DEBUG authorization_data en primera solicitud:', {
-        id: requests[0].id,
-        has_authorization_data: !!requests[0].authorization_data,
-        authorization_data_type: typeof requests[0].authorization_data,
-        authorization_data_keys: requests[0].authorization_data ? Object.keys(requests[0].authorization_data) : 'N/A',
-        month_labels: requests[0].authorization_data?.month_labels,
-        month_labels_type: typeof requests[0].authorization_data?.month_labels
-      })
-
-      const targetRequest = requests.find(r => r.id === 'fa91e671-e8be-4d4b-a7ce-e1c8048a036d')
-      if (targetRequest) {
-        console.log('🎯 SOLICITUD OBJETIVO ENCONTRADA:', {
-          id: targetRequest.id,
-          has_auth_data: !!targetRequest.authorization_data,
-          month_labels: targetRequest.authorization_data?.month_labels,
-          auth_data_keys: targetRequest.authorization_data ? Object.keys(targetRequest.authorization_data) : 'N/A'
-        })
-      }
-    }
-
     return NextResponse.json({
       success: true,
       authorization_requests: requests || [],
@@ -197,18 +203,14 @@ export async function GET(request: NextRequest) {
   }
 }
 
+// PUT - Actualizar solicitud de autorización existente
 export async function PUT(request: NextRequest) {
   try {
     const body = await request.json()
     const { id, ...updateData } = body
-
-    console.log('🔄 [UPDATE] Actualizando solicitud:', id, {
-      has_authorization_data: !!updateData.authorization_data,
-      authorization_data_keys: updateData.authorization_data ? Object.keys(updateData.authorization_data) : 'N/A',
-      month_labels_in_update: updateData.authorization_data?.month_labels,
-      month_labels_type: typeof updateData.authorization_data?.month_labels
-    })
-
+    
+    console.log('🔄 [UPDATE] Actualizando solicitud:', id, updateData)
+    
     if (!id) {
       return NextResponse.json(
         { error: 'ID de solicitud requerido para actualización' },
@@ -216,6 +218,7 @@ export async function PUT(request: NextRequest) {
       )
     }
 
+    // Actualizar solicitud de autorización
     const { data: authRequest, error: authError } = await supabaseClient
       .from('z_auto_authorization_requests')
       .update(updateData)

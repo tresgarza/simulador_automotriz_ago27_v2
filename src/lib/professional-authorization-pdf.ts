@@ -67,9 +67,14 @@ export interface ProfessionalAuthorizationData {
     // Competidores
     competitors?: Array<{ name: string; price: number }>;
     
-    // Nombres de meses personalizados por el usuario
-    month_labels?: string[];
-    
+    // Fechas personalizables por mes (separadas para ingresos y gastos)
+    mes1_fecha_ingresos?: string;
+    mes2_fecha_ingresos?: string;
+    mes3_fecha_ingresos?: string;
+    mes1_fecha_gastos?: string;
+    mes2_fecha_gastos?: string;
+    mes3_fecha_gastos?: string;
+
     // Datos detallados de ingresos por mes
     mes1_nomina?: number;
     mes1_comisiones?: number;
@@ -290,25 +295,11 @@ export const generateProfessionalAuthorizationPDF = async (data: ProfessionalAut
   currentY = Math.max(leftBoxBottom, ry) + 8;
 
   // ---- INGRESOS (AutoTable)
-  // Usar nombres de meses guardados por el usuario, o calcular automáticamente como fallback
-  const getMonthName = (monthsBack: number) => {
-    const date = new Date().getMonth() - monthsBack;
-    const monthNames = ["ENE", "FEB", "MAR", "ABR", "MAY", "JUN", 
-                       "JUL", "AGO", "SEP", "OCT", "NOV", "DIC"];
-    const year = new Date().getFullYear().toString().slice(-2);
-    const monthIndex = date < 0 ? 12 + date : date;
-    return `${monthNames[monthIndex]} ${year}`;
-  };
-
-  // Usar los nombres de meses guardados por el usuario si existen
-  const monthLabels = S.month_labels || [
-    getMonthName(2), getMonthName(1), getMonthName(0)
-  ];
-
+  // Usar fechas personalizadas por el usuario, con fallback a etiquetas simples
   const incomes = [
-    { mes: monthLabels[0], nom: S.mes1_nomina, com: S.mes1_comisiones, neg: S.mes1_negocio, efe: S.mes1_efectivo },
-    { mes: monthLabels[1], nom: S.mes2_nomina, com: S.mes2_comisiones, neg: S.mes2_negocio, efe: S.mes2_efectivo },
-    { mes: monthLabels[2], nom: S.mes3_nomina, com: S.mes3_comisiones, neg: S.mes3_negocio, efe: S.mes3_efectivo },
+    { mes: S.mes1_fecha_ingresos || "MES 1", nom: S.mes1_nomina, com: S.mes1_comisiones, neg: S.mes1_negocio, efe: S.mes1_efectivo },
+    { mes: S.mes2_fecha_ingresos || "MES 2", nom: S.mes2_nomina, com: S.mes2_comisiones, neg: S.mes2_negocio, efe: S.mes2_efectivo },
+    { mes: S.mes3_fecha_ingresos || "MES 3", nom: S.mes3_nomina, com: S.mes3_comisiones, neg: S.mes3_negocio, efe: S.mes3_efectivo },
   ];
   const sum = (k: keyof typeof incomes[number]) => incomes.reduce((a,b)=>a+Number(b[k]||0),0);
   const tNom = sum("nom"), tCom = sum("com"), tNeg = sum("neg"), tEfe = sum("efe");
@@ -353,9 +344,9 @@ export const generateProfessionalAuthorizationPDF = async (data: ProfessionalAut
 
   // ---- GASTOS (AutoTable)
   const expenses = [
-    { mes: monthLabels[0], comp:S.mes1_compromisos, per:S.mes1_gastos_personales, neg:S.mes1_gastos_negocio },
-    { mes: monthLabels[1], comp:S.mes2_compromisos, per:S.mes2_gastos_personales, neg:S.mes2_gastos_negocio },
-    { mes: monthLabels[2], comp:S.mes3_compromisos, per:S.mes3_gastos_personales, neg:S.mes3_gastos_negocio },
+    { mes: S.mes1_fecha_gastos || "MES 1", comp:S.mes1_compromisos, per:S.mes1_gastos_personales, neg:S.mes1_gastos_negocio },
+    { mes: S.mes2_fecha_gastos || "MES 2", comp:S.mes2_compromisos, per:S.mes2_gastos_personales, neg:S.mes2_gastos_negocio },
+    { mes: S.mes3_fecha_gastos || "MES 3", comp:S.mes3_compromisos, per:S.mes3_gastos_personales, neg:S.mes3_gastos_negocio },
   ];
   const esum = (k: keyof typeof expenses[number]) => expenses.reduce((a,b)=>a+Number(b[k]||0),0);
   const eComp=esum("comp"), ePer=esum("per"), eNeg=esum("neg");
