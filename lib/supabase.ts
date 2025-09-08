@@ -2,8 +2,8 @@
 import { createBrowserClient } from '@supabase/ssr'
 
 // Configuración de Supabase
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://ydnygntfkrleiseuciwq.supabase.co'
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InlkbnlnbnRma3JsZWlzZXVjaXdxIiwicm9sZSI6ImFub24iLCJpYXQiOjE3MzU3NzA0NzIsImV4cCI6MjA1MTM0NjQ3Mn0.YhYKhgzXdcBzJlqJqCLhJNhKgYvdJjLJLJLJLJLJLJL'
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://sibiwavhwnxtrszjgqti.supabase.co'
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InNpYml3YXZod254dHJzempncXRpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDEzMzEwOTksImV4cCI6MjA1NjkwNzA5OX0.KMBg5d_2NR5T-YMet9zSM5_ajEctEFu0j2ytaxq9uzA'
 
 // Cliente único para todas las operaciones
 export const supabase = createBrowserClient(supabaseUrl, supabaseAnonKey)

@@ -15,9 +15,14 @@ export interface LoginCredentials {
 // Clase para manejar autenticación
 export class AuthService {
   
-  // Login para asesores (por email)
-  static async loginAsesor(email: string): Promise<{ user: AuthUser | null, error: string | null }> {
+  // Login para asesores (por código + email)
+  static async loginAsesor(email: string, code?: string): Promise<{ user: AuthUser | null, error: string | null }> {
     try {
+      // Validar código de acceso
+      if (!code || code !== 'FINCENTIVA2025') {
+        return { user: null, error: 'Código de acceso incorrecto' }
+      }
+
       const { data, error } = await supabase
         .from('z_auto_users')
         .select('*')

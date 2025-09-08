@@ -4,14 +4,22 @@ import { supabaseClient } from '../../../../../lib/supabase'
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json()
-    const { userType, email, phone, agencyCode } = body
+    const { userType, email, phone, agencyCode, asesorCode } = body
 
     if (userType === 'asesor') {
       // Login para asesores
-      if (!email) {
+      if (!email || !asesorCode) {
         return NextResponse.json(
-          { error: 'Email es requerido para asesores' },
+          { error: 'Email y código de acceso son requeridos para asesores' },
           { status: 400 }
+        )
+      }
+
+      // Validar código de acceso
+      if (asesorCode !== 'FINCENTIVA2025') {
+        return NextResponse.json(
+          { error: 'Código de acceso incorrecto' },
+          { status: 401 }
         )
       }
 

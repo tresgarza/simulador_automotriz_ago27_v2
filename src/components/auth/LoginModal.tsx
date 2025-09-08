@@ -14,6 +14,7 @@ export function LoginModal({ isOpen, onClose, onLoginSuccess }: LoginModalProps)
   const [email, setEmail] = useState('');
   const [phone, setPhone] = useState('');
   const [agencyCode, setAgencyCode] = useState('');
+  const [asesorCode, setAsesorCode] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
 
@@ -26,7 +27,7 @@ export function LoginModal({ isOpen, onClose, onLoginSuccess }: LoginModalProps)
       let result;
       
       if (userType === 'asesor') {
-        result = await AuthService.loginAsesor(email);
+        result = await AuthService.loginAsesor(email, asesorCode);
       } else {
         result = await AuthService.loginAgency(agencyCode, phone);
       }
@@ -40,6 +41,7 @@ export function LoginModal({ isOpen, onClose, onLoginSuccess }: LoginModalProps)
         setEmail('');
         setPhone('');
         setAgencyCode('');
+        setAsesorCode('');
       }
     } catch (err) {
       setError('Error al iniciar sesión');
@@ -98,22 +100,40 @@ export function LoginModal({ isOpen, onClose, onLoginSuccess }: LoginModalProps)
         <form onSubmit={handleLogin} className="space-y-4">
           {userType === 'asesor' ? (
             // Asesor Login
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-2">
-                Email Corporativo
-              </label>
-              <div className="relative">
-                <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
-                <input
-                  type="email"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
-                  placeholder="asesor@fincentiva.com.mx"
-                  className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-2xl focus:ring-4 focus:ring-emerald-300/50 focus:border-emerald-400"
-                  required
-                />
+            <>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Código de Acceso
+                </label>
+                <div className="relative">
+                  <Key className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  <input
+                    type="text"
+                    value={asesorCode}
+                    onChange={(e) => setAsesorCode(e.target.value.toUpperCase())}
+                    placeholder="FINCENTIVA2025"
+                    className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-2xl focus:ring-4 focus:ring-emerald-300/50 focus:border-emerald-400"
+                    required
+                  />
+                </div>
               </div>
-            </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Email Corporativo
+                </label>
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    placeholder="asesor@fincentiva.com.mx"
+                    className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-2xl focus:ring-4 focus:ring-emerald-300/50 focus:border-emerald-400"
+                    required
+                  />
+                </div>
+              </div>
+            </>
           ) : (
             // Agency Login
             <>
@@ -127,7 +147,7 @@ export function LoginModal({ isOpen, onClose, onLoginSuccess }: LoginModalProps)
                     type="text"
                     value={agencyCode}
                     onChange={(e) => setAgencyCode(e.target.value.toUpperCase())}
-                    placeholder="HONDA_TEC"
+                    placeholder="ABC123"
                     className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-2xl focus:ring-4 focus:ring-blue-300/50 focus:border-blue-400"
                     required
                   />
@@ -143,7 +163,7 @@ export function LoginModal({ isOpen, onClose, onLoginSuccess }: LoginModalProps)
                     type="tel"
                     value={phone}
                     onChange={(e) => setPhone(e.target.value)}
-                    placeholder="8119881852"
+                    placeholder="81XXXXXXXX"
                     className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-2xl focus:ring-4 focus:ring-blue-300/50 focus:border-blue-400"
                     required
                   />
@@ -184,7 +204,7 @@ export function LoginModal({ isOpen, onClose, onLoginSuccess }: LoginModalProps)
         <div className="mt-6 p-4 bg-gray-50 rounded-2xl">
           <p className="text-sm text-gray-600">
             {userType === 'asesor' 
-              ? '💡 Usa tu email corporativo de Fincentiva para acceder'
+              ? '💡 Usa el código FINCENTIVA2025 y tu email corporativo para acceder'
               : '💡 Usa el código de agencia y teléfono proporcionados por Fincentiva'
             }
           </p>
