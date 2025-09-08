@@ -228,14 +228,14 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
     return months;
   };
   
-  // Usar meses estáticos basados en la fecha de creación de la solicitud
-  const getStaticMonths = () => {
-    // Si ya están guardados, usarlos
+  // SOLUCIÓN HÍBRIDA: Editable en frontend, estable en backend
+  const getInitialMonths = () => {
+    // Cargar meses guardados o usar valores por defecto
     if ((request as any).authorization_data?.month_labels) {
       return (request as any).authorization_data.month_labels;
     }
     
-    // Si no, calcular basándose en la fecha de creación de la solicitud
+    // Valores por defecto basados en fecha de creación
     const createdAt = new Date(request.created_at || new Date());
     const months = [];
     const monthNames = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'];
@@ -249,15 +249,33 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
     return months;
   };
 
-  const monthLabels = getStaticMonths();
+  // Estado editable para el frontend
+  const [monthLabels, setMonthLabels] = useState(getInitialMonths());
   
-  console.log('📅 Meses estáticos para solicitud:', {
+  // Generar opciones para selectores
+  const generateMonthOptions = () => {
+    const options = [];
+    const currentDate = new Date();
+    const monthNames = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'];
+    
+    for (let i = 23; i >= 0; i--) {
+      const date = new Date(currentDate.getFullYear(), currentDate.getMonth() - i, 1);
+      const monthName = monthNames[date.getMonth()];
+      const year = date.getFullYear().toString().slice(-2);
+      options.push(`${monthName} ${year}`);
+    }
+    return options;
+  };
+
+  const monthOptions = generateMonthOptions();
+  
+  console.log('📅 Meses inicializados:', {
     request_id: request.id,
-    created_at: request.created_at,
-    months: monthLabels
+    initial_months: monthLabels,
+    from_saved: (request as any).authorization_data?.month_labels
   });
 
-  // Los meses son ahora estáticos y no editables
+  // Los meses son editables y se guardan al finalizar
   
   // Estados para auto-guardado
   const [isAutoSaving, setIsAutoSaving] = useState(false);
@@ -449,27 +467,7 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
   
   // Nota: Auto-guardado se maneja directamente en los onChange de los selectores
 
-  const handleFormChange = useCallback((data: any) => {
-    const dataString = JSON.stringify(data);
-    
-    if (dataString === lastSaveDataRef.current) {
-      return;
-    }
-    
-    lastSaveDataRef.current = dataString;
-    
-    if (autoSaveTimeoutRef.current) {
-      clearTimeout(autoSaveTimeoutRef.current);
-    }
-    
-    autoSaveTimeoutRef.current = setTimeout(() => {
-      autoSaveForm(data, true);
-    }, 3000);
-  }, [autoSaveForm]);
-
-  useEffect(() => {
-    handleFormChange(watchedData);
-  }, [watchedData, handleFormChange]);
+  // Auto-guardado deshabilitado - solo guardado manual
 
   useEffect(() => {
     return () => {
@@ -479,20 +477,7 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
     };
   }, []);
 
-  // Soporte para Ctrl+S (sin auto-guardado automático)
-  useEffect(() => {
-    const handleKeyDown = (event: KeyboardEvent) => {
-      if ((event.ctrlKey || event.metaKey) && event.key === 's') {
-        event.preventDefault();
-        autoSaveForm(watchedData, true);
-      }
-    };
-
-    document.addEventListener('keydown', handleKeyDown);
-    return () => {
-      document.removeEventListener('keydown', handleKeyDown);
-    };
-  }, []); // Eliminar dependencias para evitar auto-guardado automático
+  // Sin auto-guardado - solo guardado manual
 
   const onSubmit = async (data: AuthorizationFormData) => {
     setIsSubmitting(true);
@@ -917,7 +902,22 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
 
                               return (
                                 <tr key={month} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
-                                  <td className="py-3 px-4 font-medium text-gray-900">{month}</td>
+                                  <td className="py-3 px-4">
+                                    <select
+                                      value={month}
+                                      onChange={(e) => {
+                                        const newMonths = [...monthLabels];
+                                        newMonths[index] = e.target.value;
+                                        setMonthLabels(newMonths);
+                                        console.log('📅 Mes cambiado (ingresos):', { index, from: month, to: e.target.value });
+                                      }}
+                                      className="w-full text-sm font-medium text-gray-900 bg-white border border-gray-300 rounded px-2 py-1 focus:ring-2 focus:ring-blue-500"
+                                    >
+                                      {monthOptions.map(option => (
+                                        <option key={option} value={option}>{option}</option>
+                                      ))}
+                                    </select>
+                                  </td>
                                   <td className="py-3 px-4">
                                     <input
                                       type="number"
@@ -1013,7 +1013,22 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
 
                               return (
                                 <tr key={month} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
-                                  <td className="py-3 px-4 font-medium text-gray-900">{month}</td>
+                                  <td className="py-3 px-4">
+                                    <select
+                                      value={month}
+                                      onChange={(e) => {
+                                        const newMonths = [...monthLabels];
+                                        newMonths[index] = e.target.value;
+                                        setMonthLabels(newMonths);
+                                        console.log('📅 Mes cambiado (gastos):', { index, from: month, to: e.target.value });
+                                      }}
+                                      className="w-full text-sm font-medium text-gray-900 bg-white border border-gray-300 rounded px-2 py-1 focus:ring-2 focus:ring-red-500"
+                                    >
+                                      {monthOptions.map(option => (
+                                        <option key={option} value={option}>{option}</option>
+                                      ))}
+                                    </select>
+                                  </td>
                                   <td className="py-3 px-4">
                                     <input
                                       type="number"
@@ -1486,13 +1501,26 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
                     </button>
 
                     {step < totalSteps ? (
-                      <button
-                        type="button"
-                        onClick={nextStep}
-                        className="px-6 py-3 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-colors"
-                      >
-                        Siguiente
-                      </button>
+                      <>
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const currentData = watch();
+                            await autoSaveForm({ ...currentData, month_labels: monthLabels }, true);
+                          }}
+                          className="px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 transition-colors flex items-center"
+                        >
+                          <Save className="w-4 h-4 mr-2" />
+                          Guardar
+                        </button>
+                        <button
+                          type="button"
+                          onClick={nextStep}
+                          className="px-6 py-3 bg-emerald-600 text-white rounded-xl hover:bg-emerald-700 transition-colors"
+                        >
+                          Siguiente
+                        </button>
+                      </>
                     ) : (
                       <button
                         type="submit"
