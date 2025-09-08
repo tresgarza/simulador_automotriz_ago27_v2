@@ -197,7 +197,19 @@ export async function GET(request: NextRequest) {
         authorization_data_type: typeof requests[0].authorization_data,
         authorization_data_keys: requests[0].authorization_data ? Object.keys(requests[0].authorization_data) : 'N/A',
         month_labels: requests[0].authorization_data?.month_labels,
+        month_labels_type: typeof requests[0].authorization_data?.month_labels,
+        authorization_data_raw: requests[0].authorization_data,
         authorization_data_sample: JSON.stringify(requests[0].authorization_data, null, 2).substring(0, 500)
+      })
+
+    // Verificar específicamente la solicitud que estamos probando
+    const targetRequest = requests.find(r => r.id === 'fa91e671-e8be-4d4b-a7ce-e1c8048a036d')
+    if (targetRequest) {
+      console.log('🎯 SOLICITUD OBJETIVO ENCONTRADA:', {
+        id: targetRequest.id,
+        has_auth_data: !!targetRequest.authorization_data,
+        month_labels: targetRequest.authorization_data?.month_labels,
+        auth_data_keys: targetRequest.authorization_data ? Object.keys(targetRequest.authorization_data) : 'N/A'
       })
     }
 
@@ -221,8 +233,14 @@ export async function PUT(request: NextRequest) {
   try {
     const body = await request.json()
     const { id, ...updateData } = body
-    
-    console.log('🔄 [UPDATE] Actualizando solicitud:', id, updateData)
+
+    console.log('🔄 [UPDATE] Actualizando solicitud:', id, {
+      has_authorization_data: !!updateData.authorization_data,
+      authorization_data_keys: updateData.authorization_data ? Object.keys(updateData.authorization_data) : 'N/A',
+      month_labels_in_update: updateData.authorization_data?.month_labels,
+      month_labels_type: typeof updateData.authorization_data?.month_labels,
+      full_update_data: updateData
+    })
     
     if (!id) {
       return NextResponse.json(
