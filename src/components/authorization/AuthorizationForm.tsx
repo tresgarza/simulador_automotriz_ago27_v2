@@ -292,27 +292,26 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
     return months;
   };
   
-  const [monthLabels, setMonthLabels] = useState(
-    (request as any).authorization_data?.month_labels || getCurrentMonths()
-  );
-
-  // Generar opciones de meses para los selectores
-  const generateMonthOptions = () => {
-    const options = [];
-    const currentDate = new Date();
+  // Usar meses estáticos basados en la fecha de creación de la solicitud
+  const getStaticMonths = () => {
+    if ((request as any).authorization_data?.month_labels) {
+      return (request as any).authorization_data.month_labels;
+    }
+    
+    const createdAt = new Date(request.created_at || new Date());
+    const months = [];
     const monthNames = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'];
     
-    // Generar opciones para los últimos 24 meses
-    for (let i = 23; i >= 0; i--) {
-      const date = new Date(currentDate.getFullYear(), currentDate.getMonth() - i, 1);
+    for (let i = 3; i >= 1; i--) {
+      const date = new Date(createdAt.getFullYear(), createdAt.getMonth() - i, 1);
       const monthName = monthNames[date.getMonth()];
       const year = date.getFullYear().toString().slice(-2);
-      options.push(`${monthName} ${year}`);
+      months.push(`${monthName} ${year}`);
     }
-    return options;
+    return months;
   };
 
-  const monthOptions = generateMonthOptions();
+  const monthLabels = getStaticMonths();
   
   // Estados para auto-guardado
   const [isAutoSaving, setIsAutoSaving] = useState(false);
@@ -1204,25 +1203,7 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
 
                           return (
                             <tr key={month} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
-                              <td className="py-3 px-4">
-                                <select
-                                  value={month}
-                                  onChange={async (e) => {
-                                    const newMonths = [...monthLabels];
-                                    newMonths[index] = e.target.value;
-                                    setMonthLabels(newMonths);
-                                    
-                                    // Guardar inmediatamente
-                                    const currentData = watch();
-                                    await autoSaveForm({ ...currentData, month_labels: newMonths }, true);
-                                  }}
-                                  className="w-full text-sm font-medium text-gray-900 bg-transparent border-none focus:ring-2 focus:ring-blue-500 rounded px-2 py-1"
-                                >
-                                  {monthOptions.map(option => (
-                                    <option key={option} value={option}>{option}</option>
-                                  ))}
-                                </select>
-                              </td>
+                              <td className="py-3 px-4 font-medium text-gray-900">{month}</td>
                               <td className="py-3 px-4">
                                 <input
                                   type="number"
@@ -1334,25 +1315,7 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
 
                           return (
                             <tr key={month} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
-                              <td className="py-3 px-4">
-                                <select
-                                  value={month}
-                                  onChange={async (e) => {
-                                    const newMonths = [...monthLabels];
-                                    newMonths[index] = e.target.value;
-                                    setMonthLabels(newMonths);
-                                    
-                                    // Guardar inmediatamente
-                                    const currentData = watch();
-                                    await autoSaveForm({ ...currentData, month_labels: newMonths }, true);
-                                  }}
-                                  className="w-full text-sm font-medium text-gray-900 bg-transparent border-none focus:ring-2 focus:ring-red-500 rounded px-2 py-1"
-                                >
-                                  {monthOptions.map(option => (
-                                    <option key={option} value={option}>{option}</option>
-                                  ))}
-                                </select>
-                              </td>
+                              <td className="py-3 px-4 font-medium text-gray-900">{month}</td>
                               <td className="py-3 px-4">
                                 <input
                                   type="number"

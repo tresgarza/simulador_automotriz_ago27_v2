@@ -228,80 +228,36 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
     return months;
   };
   
-  // Usar localStorage como fuente de verdad temporal para los meses
-  const getStoredMonths = () => {
-    if (typeof window !== 'undefined') {
-      const stored = localStorage.getItem(`months_${request.id}`);
-      if (stored) {
-        try {
-          return JSON.parse(stored);
-        } catch (e) {
-          console.warn('Error parsing stored months:', e);
-        }
-      }
-    }
-    return (request as any).authorization_data?.month_labels || getCurrentMonths();
-  };
-
-  const [monthLabels, setMonthLabels] = useState(getStoredMonths());
-
-  // Debug: Verificar qué month_labels se están cargando
-  console.log('🔍 DEBUG: Cargando month_labels:', {
-    request_id: request.id,
-    from_localStorage: typeof window !== 'undefined' ? localStorage.getItem(`months_${request.id}`) : null,
-    from_request: (request as any).authorization_data?.month_labels,
-    final_used: monthLabels
-  });
-
-  // Función para actualizar meses y guardar en localStorage y base de datos
-  const updateMonthLabels = async (newMonths: string[]) => {
-    setMonthLabels(newMonths);
-    
-    // Guardar en localStorage inmediatamente
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(`months_${request.id}`, JSON.stringify(newMonths));
+  // Usar meses estáticos basados en la fecha de creación de la solicitud
+  const getStaticMonths = () => {
+    // Si ya están guardados, usarlos
+    if ((request as any).authorization_data?.month_labels) {
+      return (request as any).authorization_data.month_labels;
     }
     
-    // Guardar en base de datos en segundo plano
-    try {
-      const updateData = {
-        id: request.id,
-        authorization_data: {
-          ...(request as any).authorization_data,
-          month_labels: newMonths,
-          auto_saved_at: new Date().toISOString()
-        }
-      };
-      
-      await fetch('/api/authorization-requests', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(updateData)
-      });
-      
-      console.log('💾 Month labels sincronizados con BD:', newMonths);
-    } catch (error) {
-      console.error('❌ Error sincronizando month labels:', error);
-    }
-  };
-
-  // Generar opciones de meses para los selectores
-  const generateMonthOptions = () => {
-    const options = [];
-    const currentDate = new Date();
+    // Si no, calcular basándose en la fecha de creación de la solicitud
+    const createdAt = new Date(request.created_at || new Date());
+    const months = [];
     const monthNames = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'];
     
-    // Generar opciones para los últimos 24 meses
-    for (let i = 23; i >= 0; i--) {
-      const date = new Date(currentDate.getFullYear(), currentDate.getMonth() - i, 1);
+    for (let i = 3; i >= 1; i--) {
+      const date = new Date(createdAt.getFullYear(), createdAt.getMonth() - i, 1);
       const monthName = monthNames[date.getMonth()];
       const year = date.getFullYear().toString().slice(-2);
-      options.push(`${monthName} ${year}`);
+      months.push(`${monthName} ${year}`);
     }
-    return options;
+    return months;
   };
 
-  const monthOptions = generateMonthOptions();
+  const monthLabels = getStaticMonths();
+  
+  console.log('📅 Meses estáticos para solicitud:', {
+    request_id: request.id,
+    created_at: request.created_at,
+    months: monthLabels
+  });
+
+  // Los meses son ahora estáticos y no editables
   
   // Estados para auto-guardado
   const [isAutoSaving, setIsAutoSaving] = useState(false);
@@ -447,7 +403,7 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
         competitors_data: data.competitors || [],
         authorization_data: {
           ...data,
-          month_labels: data.month_labels || monthLabels, // Usar los meses del parámetro si existen, sino los del estado
+          month_labels: monthLabels, // Guardar los meses estáticos calculados
           auto_saved_at: new Date().toISOString()
         },
         ...statusUpdate // Aplicar cambio de estado si es necesario
@@ -486,11 +442,8 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
     }
   }, [request.id]);
 
-  // Limpiar localStorage cuando se cierre el formulario
+  // Función de cierre simplificada
   const handleClose = () => {
-    if (typeof window !== 'undefined') {
-      localStorage.removeItem(`months_${request.id}`);
-    }
     onClose();
   };
   
@@ -526,7 +479,7 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
     };
   }, []);
 
-  // Soporte para Ctrl+S
+  // Soporte para Ctrl+S (sin auto-guardado automático)
   useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if ((event.ctrlKey || event.metaKey) && event.key === 's') {
@@ -539,7 +492,7 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
     return () => {
       document.removeEventListener('keydown', handleKeyDown);
     };
-  }, [watchedData, autoSaveForm]);
+  }, []); // Eliminar dependencias para evitar auto-guardado automático
 
   const onSubmit = async (data: AuthorizationFormData) => {
     setIsSubmitting(true);
@@ -549,10 +502,7 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
         setSaveStatus('saved');
         setLastSaved(new Date());
         
-        // Limpiar localStorage ya que se guardó exitosamente
-        if (typeof window !== 'undefined') {
-          localStorage.removeItem(`months_${request.id}`);
-        }
+        // Autorización completada exitosamente
         
         // Mostrar mensaje de éxito y cerrar después de un breve delay
         console.log('✅ Autorización finalizada exitosamente');
@@ -967,22 +917,7 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
 
                               return (
                                 <tr key={month} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
-                                  <td className="py-3 px-4">
-                                    <select
-                                      value={month}
-                                      onChange={async (e) => {
-                                        const newMonths = [...monthLabels];
-                                        newMonths[index] = e.target.value;
-                                        console.log('📅 Cambiando mes:', { index, from: month, to: e.target.value, newMonths });
-                                        await updateMonthLabels(newMonths);
-                                      }}
-                                      className="w-full text-sm font-medium text-gray-900 bg-transparent border-none focus:ring-2 focus:ring-blue-500 rounded px-2 py-1"
-                                    >
-                                      {monthOptions.map(option => (
-                                        <option key={option} value={option}>{option}</option>
-                                      ))}
-                                    </select>
-                                  </td>
+                                  <td className="py-3 px-4 font-medium text-gray-900">{month}</td>
                                   <td className="py-3 px-4">
                                     <input
                                       type="number"
@@ -1078,22 +1013,7 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
 
                               return (
                                 <tr key={month} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
-                                  <td className="py-3 px-4">
-                                    <select
-                                      value={month}
-                                      onChange={async (e) => {
-                                        const newMonths = [...monthLabels];
-                                        newMonths[index] = e.target.value;
-                                        console.log('📅 Cambiando mes (gastos):', { index, from: month, to: e.target.value, newMonths });
-                                        await updateMonthLabels(newMonths);
-                                      }}
-                                      className="w-full text-sm font-medium text-gray-900 bg-transparent border-none focus:ring-2 focus:ring-red-500 rounded px-2 py-1"
-                                    >
-                                      {monthOptions.map(option => (
-                                        <option key={option} value={option}>{option}</option>
-                                      ))}
-                                    </select>
-                                  </td>
+                                  <td className="py-3 px-4 font-medium text-gray-900">{month}</td>
                                   <td className="py-3 px-4">
                                     <input
                                       type="number"
