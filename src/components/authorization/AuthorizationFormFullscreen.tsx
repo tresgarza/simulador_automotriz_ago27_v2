@@ -230,16 +230,27 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
   
   // SOLUCIÓN HÍBRIDA: Editable en frontend, estable en backend
   const getInitialMonths = () => {
-    // Cargar meses guardados o usar valores por defecto
+    console.log('🔍 DEBUG getInitialMonths - request object:', {
+      request_id: request.id,
+      has_authorization_data: !!(request as any).authorization_data,
+      authorization_data_keys: Object.keys((request as any).authorization_data || {}),
+      month_labels_in_request: (request as any).authorization_data?.month_labels,
+      created_at: request.created_at
+    });
+
+    // Prioridad 1: Cargar meses guardados en authorization_data
     if ((request as any).authorization_data?.month_labels) {
+      console.log('✅ Usando month_labels guardados:', (request as any).authorization_data.month_labels);
       return (request as any).authorization_data.month_labels;
     }
-    
+
+    console.log('⚠️ No hay month_labels guardados, usando valores por defecto');
+
     // Valores por defecto basados en fecha de creación
     const createdAt = new Date(request.created_at || new Date());
     const months = [];
     const monthNames = ['ENE', 'FEB', 'MAR', 'ABR', 'MAY', 'JUN', 'JUL', 'AGO', 'SEP', 'OCT', 'NOV', 'DIC'];
-    
+
     for (let i = 3; i >= 1; i--) {
       const date = new Date(createdAt.getFullYear(), createdAt.getMonth() - i, 1);
       const monthName = monthNames[date.getMonth()];
@@ -251,6 +262,22 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
 
   // Estado editable para el frontend
   const [monthLabels, setMonthLabels] = useState(getInitialMonths());
+
+  // useEffect para actualizar monthLabels cuando cambian los datos del request
+  useEffect(() => {
+    const newMonths = getInitialMonths();
+    const currentMonthsString = JSON.stringify(monthLabels);
+    const newMonthsString = JSON.stringify(newMonths);
+
+    if (currentMonthsString !== newMonthsString) {
+      console.log('🔄 Actualizando monthLabels desde useEffect:', {
+        from: monthLabels,
+        to: newMonths,
+        reason: 'Request data changed'
+      });
+      setMonthLabels(newMonths);
+    }
+  }, [request?.authorization_data?.month_labels, request?.created_at]);
   
   // Generar opciones para selectores
   const generateMonthOptions = () => {
