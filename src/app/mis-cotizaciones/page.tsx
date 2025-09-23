@@ -19,7 +19,7 @@ import {
   Eye
 } from "lucide-react";
 import Link from "next/link";
-import { PDFGenerator } from "../../components/pdf/PDFGenerator";
+import { generateProfessionalPDF } from "../../components/pdf/ProfessionalPDFGenerator";
 
 interface Quote {
   id: string;
@@ -160,7 +160,7 @@ export default function MisCotizacionesPage() {
       };
 
       // Generar PDF usando el componente existente
-      await PDFGenerator.generatePDF(matrixResult, formData);
+      await generateProfessionalPDF(matrixResult);
       
     } catch (error) {
       console.error('Error generating PDF:', error);
