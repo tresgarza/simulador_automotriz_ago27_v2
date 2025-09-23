@@ -51,6 +51,7 @@ export default function Home() {
   const [formData, setFormData] = useState<EnhancedFormData | null>(null);
   const [showLoginModal, setShowLoginModal] = useState(false);
   const [currentQuoteId, setCurrentQuoteId] = useState<string | null>(null);
+  const [selectedSimulationId, setSelectedSimulationId] = useState<string | null>(null);
   const [showDashboard, setShowDashboard] = useState(false);
   const [isClient, setIsClient] = useState(false);
 
@@ -97,14 +98,14 @@ export default function Home() {
         vendorName: data.vendor_name,
         originProcedencia: data.origin_procedencia,
         
-        // Datos del vehículo
-        vehicleBrand: data.vehicle_brand,
-        vehicleModel: data.vehicle_model,
-        vehicleYear: data.vehicle_year,
-        vehicleType: data.vehicle_type,
-        vehicleUsage: data.vehicle_usage,
-        vehicleOrigin: data.vehicle_origin,
-        serialNumber: data.serial_number,
+        // Datos del vehículo (manejar caso "no tiene vehículo aún")
+        vehicleBrand: data.no_vehicle_yet ? "Por definir" : (data.vehicle_brand || "Por definir"),
+        vehicleModel: data.no_vehicle_yet ? "Por definir" : (data.vehicle_model || "Por definir"),
+        vehicleYear: data.no_vehicle_yet ? new Date().getFullYear() : (data.vehicle_year || new Date().getFullYear()),
+        vehicleType: data.vehicle_type || "Automóvil",
+        vehicleUsage: data.vehicle_usage || "Personal",
+        vehicleOrigin: data.vehicle_origin || "Nacional",
+        serialNumber: data.serial_number || "",
         vehicleValue: data.vehicle_value,
         
         // Datos del crédito
@@ -136,8 +137,9 @@ export default function Home() {
     return null;
   };
 
-  const saveSimulationsToDatabase = async (quoteId: string, results: MatrixResult) => {
+  const saveSimulationsToDatabase = async (quoteId: string, results: MatrixResult): Promise<string | null> => {
     const availableRates = getAvailableRates();
+    let firstSimulationId: string | null = null;
     
     for (const tierCode of availableRates) {
       const tierResults = results[tierCode as keyof MatrixResult];
@@ -184,12 +186,20 @@ export default function Home() {
           } else {
             const result = await response.json();
             console.log('✅ Simulation saved successfully:', result);
+            
+            // Capturar el ID de la primera simulación guardada
+            if (!firstSimulationId && result.simulation?.id) {
+              firstSimulationId = result.simulation.id;
+              console.log('🎯 Primera simulación ID capturada:', firstSimulationId);
+            }
           }
         } catch (error) {
           console.error('❌ Network error saving simulation:', error);
         }
       }
     }
+    
+    return firstSimulationId;
   };
 
   const onSubmit = async (data: EnhancedFormData) => {
@@ -208,6 +218,11 @@ export default function Home() {
       const availableRates = getAvailableRates();
       const availableTerms = AuthService.getAvailableTerms();
       const terms: Term[] = availableTerms as Term[];
+      
+      // Debug logs
+      console.log('🔍 Debug - User:', user);
+      console.log('🔍 Debug - Available rates:', availableRates);
+      console.log('🔍 Debug - Available terms:', availableTerms);
       
       const tierPromises = availableRates.map(async (tier) => {
         const termResults = await Promise.all(
@@ -235,7 +250,15 @@ export default function Home() {
               headers: { "content-type": "application/json" }, 
               body: JSON.stringify(body) 
             });
+            
+            if (!res.ok) {
+              console.error(`❌ API Error for tier ${tier}, term ${term}:`, res.status, res.statusText);
+              const errorText = await res.text();
+              console.error('Error details:', errorText);
+            }
+            
             const json = await res.json();
+            console.log(`✅ API Success for tier ${tier}, term ${term}:`, json.summary?.pmt_total_month2);
             return [term, json] as const;
           })
         );
@@ -262,7 +285,11 @@ export default function Home() {
 
       // Guardar simulaciones en base de datos
       if (quoteId) {
-        await saveSimulationsToDatabase(quoteId, matrix);
+        const simulationId = await saveSimulationsToDatabase(quoteId, matrix);
+        if (simulationId) {
+          setSelectedSimulationId(simulationId);
+          console.log('🎯 Simulation ID establecido:', simulationId);
+        }
       }
 
     } catch (error) {
@@ -402,6 +429,8 @@ export default function Home() {
               vehicleYear={formData?.vehicle_year}
               vendorName={formData?.vendor_name}
               dealerAgency={formData?.dealer_agency}
+              currentQuoteId={currentQuoteId}
+              selectedSimulationId={selectedSimulationId}
             />
           </div>
         </div>

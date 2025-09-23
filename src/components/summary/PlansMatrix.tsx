@@ -1,5 +1,6 @@
 "use client";
 import { useState, useEffect } from "react";
+import { useRouter } from "next/navigation";
 import { Download, FileText, Share2, TrendingUp, Clock, Star, CheckCircle, Check, FileCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { exportScheduleXLSX } from "@/csv/export";
@@ -8,6 +9,7 @@ import { generateProfessionalPDF } from "@/components/pdf/ProfessionalPDFGenerat
 import { useAuth, AuthService } from "../../../lib/auth";
 import { AuthorizationService } from "../../../lib/authorization-service";
 import { AuthorizationForm } from "../authorization/AuthorizationFormFullscreen";
+import { CreditApplicationForm } from "../credit-application/CreditApplicationForm";
 
 type ApiResult = {
   summary: {
@@ -165,6 +167,7 @@ export function PlansMatrix({
   selectedSimulationId
 }: PlansMatrixProps) {
   const { isAsesor, isAgency, user } = useAuth();
+  const router = useRouter();
 
   // Estado para controlar la confirmación de selección
   const [isSelectionConfirmed, setIsSelectionConfirmed] = useState(false);
@@ -174,6 +177,9 @@ export function PlansMatrix({
   const [showAuthorizationForm, setShowAuthorizationForm] = useState(false);
   const [isRequestingAuthorization, setIsRequestingAuthorization] = useState(false);
   const [isAuthorizationSent, setIsAuthorizationSent] = useState(false);
+  
+  // Estado para el formulario de solicitud de crédito
+  const [showCreditApplicationForm, setShowCreditApplicationForm] = useState(false);
 
   // Función para confirmar la selección
   const handleConfirmSelection = async () => {
@@ -188,6 +194,28 @@ export function PlansMatrix({
       setIsConfirming(false);
     }
   };
+
+  // Función para redirigir a la página de solicitud de crédito
+  const handleRedirectToCreditApplication = () => {
+    console.log('🔄 Redirigiendo a solicitud de crédito con parámetros:', {
+      quoteId: currentQuoteId,
+      simulationId: selectedSimulationId
+    });
+    
+    // Construir URL con parámetros para pre-llenar
+    const params = new URLSearchParams();
+    if (currentQuoteId) {
+      params.append('quote_id', currentQuoteId);
+    }
+    if (selectedSimulationId) {
+      params.append('simulation_id', selectedSimulationId);
+    }
+    
+    const url = `/solicitud-credito${params.toString() ? `?${params.toString()}` : ''}`;
+    console.log('🔗 URL de redirección:', url);
+    
+    router.push(url);
+  };
   
   // Determinar el primer tier disponible basado en los datos
   const availableTiers = Object.keys(result).filter(tier => 
@@ -195,36 +223,68 @@ export function PlansMatrix({
   ) as ("A" | "B" | "C")[];
   
   // Función para obtener el tier por defecto según el tipo de usuario
-  const getDefaultTier = (): "A" | "B" | "C" => {
+  const getDefaultTier = (currentTier?: "A" | "B" | "C"): "A" | "B" | "C" => {
     if (availableTiers.length === 0) return "A";
     
-    // Para asesores, default a Tasa C (45%)
-    if (user?.user_type === 'asesor' && availableTiers.includes("C")) {
+    // Para asesores, default a Tasa C (45%) solo en la inicialización
+    if (user?.user_type === 'asesor' && availableTiers.includes("C") && !currentTier) {
       return "C";
+    }
+    
+    // Si hay un tier actual y está disponible, mantenerlo
+    if (currentTier && availableTiers.includes(currentTier)) {
+      return currentTier;
     }
     
     // Para otros usuarios, usar el primer tier disponible
     return availableTiers[0];
   };
 
-  const [selectedTier, setSelectedTier] = useState<"A" | "B" | "C">(getDefaultTier());
+  const [selectedTier, setSelectedTier] = useState<"A" | "B" | "C">(() => {
+    // Inicialización lazy para evitar problemas de dependencias circulares
+    const initialTiers = Object.keys(result).filter(tier => 
+      Object.keys(result[tier as keyof MatrixResult] || {}).length > 0
+    ) as ("A" | "B" | "C")[];
+    
+    if (initialTiers.length === 0) return "A";
+    // Siempre usar tasa C (45%) por defecto para todos los usuarios
+    if (initialTiers.includes("C")) return "C";
+    return initialTiers[0];
+  });
   const [selectedTerm, setSelectedTerm] = useState<Term>(48);
 
-  // Actualizar tier seleccionado cuando cambien los datos disponibles
+  // Asegurarse de que se está utilizando un tier disponible
+  // Para usuarios no asesores, siempre usar tasa C (45%)
+  const effectiveTier = !isAsesor && availableTiers.includes("C") 
+    ? "C" 
+    : (availableTiers.includes(selectedTier) ? selectedTier : getDefaultTier());
+  const currentResult = result[effectiveTier]?.[selectedTerm];
+
+  // Solo actualizar tier si el tier actual no está disponible
   useEffect(() => {
-    const defaultTier = getDefaultTier();
-    if (defaultTier !== selectedTier && availableTiers.includes(defaultTier)) {
+    if (availableTiers.length > 0 && !availableTiers.includes(selectedTier)) {
+      const defaultTier = getDefaultTier(selectedTier);
+      console.log('🔄 Tier not available, switching from', selectedTier, 'to', defaultTier);
       setSelectedTier(defaultTier);
     }
-  }, [availableTiers, user?.user_type]);
+  }, [availableTiers, selectedTier]);
 
-  // Reset del estado cuando cambian los parámetros de simulación
+  // Reset del estado solo cuando cambian los parámetros de simulación (no cuando cambia tier para asesores)
   useEffect(() => {
+    // Solo resetear si cambian los datos de resultado (nueva simulación)
     setIsSelectionConfirmed(false);
     setIsAuthorizationSent(false);
-  }, [selectedTier, selectedTerm]);
-
-  const currentResult = result[selectedTier]?.[selectedTerm];
+    
+    // Debug para verificar el cambio de tier
+    console.log('🔄 Result data changed:', { 
+      selectedTier, 
+      selectedTerm, 
+      effectiveTier,
+      hasResult: !!result[selectedTier]?.[selectedTerm],
+      availableTiers,
+      resultKeys: Object.keys(result)
+    });
+  }, [result]); // Solo depender de 'result', no de selectedTier/selectedTerm
   
   // Filtrar configuración de tiers para mostrar solo los disponibles
   const availableTierConfig = tierConfig.filter(tier => 
@@ -491,11 +551,20 @@ Será revisada por un asesor.`);
         <div className={`grid gap-2 md:gap-3 ${availableTierConfig.length === 1 ? 'grid-cols-1' : availableTierConfig.length === 2 ? 'grid-cols-2' : 'grid-cols-3'}`}>
           {availableTierConfig.map((tier) => {
           const IconComponent = tier.icon;
-          const isSelected = selectedTier === tier.key;
+          const isSelected = effectiveTier === tier.key;
           return (
             <button
               key={tier.key}
-              onClick={() => setSelectedTier(tier.key)}
+              onClick={() => {
+                console.log(`🖱️ Clicking tier ${tier.key} (current: ${selectedTier}, available: ${availableTiers.join(', ')})`);
+                console.log(`📊 Has data for ${tier.key}:`, !!result[tier.key]?.[selectedTerm]);
+                setSelectedTier(tier.key);
+                
+                // Forzar actualización del estado
+                setTimeout(() => {
+                  console.log(`✅ Tier after click: ${tier.key}, state should be:`, tier.key);
+                }, 100);
+              }}
               className={`relative p-3 md:p-4 rounded-2xl border-2 transition-all duration-300 transform hover:scale-105 hover:shadow-lg ${
                 isSelected 
                   ? 'border-white bg-white/25 backdrop-blur shadow-xl scale-105' 
@@ -533,7 +602,7 @@ Será revisada por un asesor.`);
           >
             <div className="text-xs md:text-sm font-medium">{termLabels[term]}</div>
             <div className="text-xs opacity-75">
-              {formatMXN(result[selectedTier]?.[term]?.summary?.pmt_total_month2 || 0)}
+              {formatMXN(result[effectiveTier]?.[term]?.summary?.pmt_total_month2 || 0)}
             </div>
           </button>
         ))}
@@ -547,7 +616,7 @@ Será revisada por un asesor.`);
           {/* Payment Amount */}
           <div className="text-center mb-8">
             <div className="text-4xl md:text-6xl font-bold text-white mb-2 transition-all duration-500 ease-out">
-              <AnimatedNumber value={currentResult?.summary?.pmt_total_month2 || 0} />
+                    <AnimatedNumber value={currentResult?.summary?.pmt_total_month2 || 0} />
             </div>
             <div className="text-white/80 text-lg">Pago mensual</div>
 
@@ -683,6 +752,22 @@ Será revisada por un asesor.`);
                   Envía tu solicitud para revisión por un asesor especializado
                 </p>
 
+                {/* Botón de Solicitud de Crédito */}
+                <div className="mb-6">
+                  <Button
+                    onClick={handleRedirectToCreditApplication}
+                    className="w-full py-4 px-8 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-bold text-lg rounded-2xl shadow-xl transform hover:scale-105 transition-all duration-300"
+                  >
+                    <div className="flex items-center justify-center">
+                      <FileText className="w-6 h-6 mr-3" />
+                      LLENAR SOLICITUD DE CRÉDITO
+                    </div>
+                  </Button>
+                  <p className="text-white/60 text-sm mt-2 text-center">
+                    Completa tu solicitud digital y descarga el PDF
+                  </p>
+                </div>
+
                 {/* Botones de descarga disponibles también */}
                 <div className="border-t border-white/10 pt-6">
                   <p className="text-white/60 text-sm mb-4 text-center">
@@ -740,45 +825,97 @@ Será revisada por un asesor.`);
                   </p>
                 </div>
 
-                {/* Botones de descarga después de enviar autorización */}
-                <div className={`grid gap-4 ${isAsesor ? 'grid-cols-1 md:grid-cols-3' : 'grid-cols-1'}`}>
+                {/* Botón de Solicitud de Crédito - MANTENER VISIBLE */}
+                <div className="mb-6">
                   <Button
-                    variant="outline"
-                    className="w-full py-3 bg-white/10 border-white/30 text-white hover:bg-white/20"
-                    onClick={() => handleGeneratePDF()}
+                    onClick={handleRedirectToCreditApplication}
+                    className="w-full py-4 px-8 bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-bold text-lg rounded-2xl shadow-xl transform hover:scale-105 transition-all duration-300"
                   >
-                    <FileText className="w-4 h-4 mr-2" />
-                    Descargar PDF
+                    <div className="flex items-center justify-center">
+                      <FileText className="w-6 h-6 mr-3" />
+                      LLENAR SOLICITUD DE CRÉDITO
+                    </div>
                   </Button>
+                  <p className="text-white/60 text-sm mt-2 text-center">
+                    Completa tu solicitud digital con los datos ya guardados
+                  </p>
+                </div>
 
-                  {/* Excel y JSON solo para Asesores */}
-                  {isAsesor && (
-                    <>
-                      <Button
-                        variant="outline"
-                        className="w-full py-3 bg-white/10 border-white/30 text-white hover:bg-white/20"
-                        onClick={handleExportXLSX}
-                      >
-                        <Download className="w-4 h-4 mr-2" />
-                        Exportar Excel
-                      </Button>
+                {/* Botones de descarga después de enviar autorización */}
+                <div className="border-t border-white/10 pt-6">
+                  <p className="text-white/60 text-sm mb-4 text-center">
+                    También puedes descargar tu cotización:
+                  </p>
+                  <div className={`grid gap-4 ${isAsesor ? 'grid-cols-1 md:grid-cols-3' : 'grid-cols-1'}`}>
+                    <Button
+                      variant="outline"
+                      className="w-full py-3 bg-white/10 border-white/30 text-white hover:bg-white/20"
+                      onClick={() => handleGeneratePDF()}
+                    >
+                      <FileText className="w-4 h-4 mr-2" />
+                      Descargar PDF
+                    </Button>
 
-                      <Button
-                        variant="outline"
-                        className="w-full py-3 bg-white/10 border-white/30 text-white hover:bg-white/20"
-                        onClick={handleCopyJSON}
-                      >
-                        <Share2 className="w-4 h-4 mr-2" />
-                        Copiar JSON
-                      </Button>
-                    </>
-                  )}
+                    {/* Excel y JSON solo para Asesores */}
+                    {isAsesor && (
+                      <>
+                        <Button
+                          variant="outline"
+                          className="w-full py-3 bg-white/10 border-white/30 text-white hover:bg-white/20"
+                          onClick={handleExportXLSX}
+                        >
+                          <Download className="w-4 h-4 mr-2" />
+                          Exportar Excel
+                        </Button>
+
+                        <Button
+                          variant="outline"
+                          className="w-full py-3 bg-white/10 border-white/30 text-white hover:bg-white/20"
+                          onClick={handleCopyJSON}
+                        >
+                          <Share2 className="w-4 h-4 mr-2" />
+                          Copiar JSON
+                        </Button>
+                      </>
+                    )}
+                  </div>
                 </div>
               </>
             )}
           </div>
         </div>
       </div>
+
+      {/* Modal de Formulario de Solicitud de Crédito */}
+      {showCreditApplicationForm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg max-w-6xl w-full max-h-[90vh] overflow-hidden">
+            <div className="p-6 border-b">
+              <div className="flex items-center justify-between">
+                <h2 className="text-2xl font-bold text-gray-900">Solicitud de Crédito Digital</h2>
+                <Button
+                  variant="outline"
+                  onClick={() => setShowCreditApplicationForm(false)}
+                  className="text-gray-500 hover:text-gray-700"
+                >
+                  ✕
+                </Button>
+              </div>
+            </div>
+            <div className="overflow-y-auto max-h-[calc(90vh-120px)]">
+              <CreditApplicationForm
+                quoteId={currentQuoteId || undefined}
+                simulationId={selectedSimulationId || undefined}
+                onSuccess={(application) => {
+                  setShowCreditApplicationForm(false)
+                  alert(`Solicitud enviada exitosamente. Folio: ${application.folio_number}`)
+                }}
+                onCancel={() => setShowCreditApplicationForm(false)}
+              />
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );

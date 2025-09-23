@@ -204,7 +204,7 @@ export function LoginModal({ isOpen, onClose, onLoginSuccess }: LoginModalProps)
         <div className="mt-6 p-4 bg-gray-50 rounded-2xl">
           <p className="text-sm text-gray-600">
             {userType === 'asesor' 
-              ? '💡 Usa el código FINCENTIVA2025 y tu email corporativo para acceder'
+              ? '💡 Usa el código de tu financiera y tu email corporativo para acceder'
               : '💡 Usa el código de agencia y teléfono proporcionados por Fincentiva'
             }
           </p>

@@ -44,7 +44,7 @@ const AuthorizationSchema = z.object({
   dealership: z.string().min(1, "La agencia es requerida"),
   vehicle_brand: z.string().min(1, "La marca es requerida"),
   vehicle_model: z.string().min(1, "El modelo es requerido"),
-  vehicle_year: z.coerce.number().min(2000, "El año debe ser mayor a 2000"),
+  vehicle_year: z.coerce.number().min(2000, "El año debe ser mayor a 2000").max(2026, "El año no puede ser mayor a 2026"),
   sale_value: z.coerce.number().min(0, "El valor de venta no puede ser negativo"),
   book_value: z.coerce.number().min(0, "El valor de libro azul no puede ser negativo"),
   competitor_1: z.coerce.number().min(0, "El precio del competidor 1 no puede ser negativo"),
@@ -128,12 +128,45 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
   const watchedBusinessExpenses = watch("business_expenses");
   const watchedMonthlySalary = watch("monthly_salary");
   const watchedMonthlyCapacity = watch("monthly_capacity");
+  const watchedInterestRate = watch("interest_rate");
+  const watchedRequestedAmount = watch("requested_amount");
+  const watchedTermMonths = watch("term_months");
 
   // Calcular total de ingresos
-  const totalIncome = watchedIncomes?.reduce((sum, income) => sum + (income.amount || 0), 0) || 0;
-  const totalExpenses = (watchedCommitments || 0) + (watchedPersonalExpenses || 0) + (watchedBusinessExpenses || 0);
+  const totalIncome = watchedIncomes?.reduce((sum, income) => sum + (Number(income.amount) || 0), 0) || 0;
+  const totalExpenses = (Number(watchedCommitments) || 0) + (Number(watchedPersonalExpenses) || 0) + (Number(watchedBusinessExpenses) || 0);
   const availableIncome = totalIncome - totalExpenses;
-  const capacityPercentage = availableIncome > 0 ? (watchedMonthlyCapacity / availableIncome) * 100 : 0;
+  const capacityPercentage = availableIncome > 0 ? ((Number(watchedMonthlyCapacity) || 0) / availableIncome) * 100 : 0;
+
+  // Calcular pago mensual basado en la tasa de interés actual
+  const calculateMonthlyPayment = (principal: number, annualRate: number, termMonths: number): number => {
+    if (!principal || !annualRate || !termMonths) return 0;
+    
+    const monthlyRate = (annualRate / 100) / 12;
+    if (monthlyRate === 0) return principal / termMonths;
+    
+    const payment = principal * (monthlyRate * Math.pow(1 + monthlyRate, termMonths)) / 
+                   (Math.pow(1 + monthlyRate, termMonths) - 1);
+    return Math.round(payment * 100) / 100;
+  };
+
+  const calculatedMonthlyPayment = calculateMonthlyPayment(
+    Number(watchedRequestedAmount) || 0,
+    Number(watchedInterestRate) || 45,
+    Number(watchedTermMonths) || 48
+  );
+
+  // Efecto para actualizar la capacidad de pago cuando cambie la tasa
+  useEffect(() => {
+    if (watchedInterestRate && watchedRequestedAmount && watchedTermMonths) {
+      const newPayment = calculateMonthlyPayment(
+        Number(watchedRequestedAmount),
+        Number(watchedInterestRate),
+        Number(watchedTermMonths)
+      );
+      setValue("monthly_capacity", newPayment);
+    }
+  }, [watchedInterestRate, watchedRequestedAmount, watchedTermMonths, setValue]);
 
   const onSubmit = async (data: AuthorizationFormData) => {
     setIsSubmitting(true);
@@ -399,12 +432,21 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
                     <label className="block text-sm font-medium text-gray-700 mb-2">
                       Capacidad de Pago Mensual *
                     </label>
-                    <input
-                      type="number"
-                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                      placeholder="24250.88"
-                      {...register("monthly_capacity")}
-                    />
+                    <div className="relative">
+                      <input
+                        type="number"
+                        className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                        placeholder="24250.88"
+                        {...register("monthly_capacity")}
+                      />
+                      {calculatedMonthlyPayment > 0 && (
+                        <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                          <span className="text-xs text-emerald-600 bg-emerald-50 px-2 py-1 rounded">
+                            Calc: ${Number(calculatedMonthlyPayment).toLocaleString()}
+                          </span>
+                        </div>
+                      )}
+                    </div>
                     {errors.monthly_capacity && (
                       <p className="text-red-600 text-sm mt-1">{errors.monthly_capacity.message}</p>
                     )}
@@ -597,7 +639,7 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
                     <div className="space-y-3">
                       <div className="flex justify-between">
                         <span className="text-gray-700">Capacidad de Pago:</span>
-                        <span className="font-semibold">{formatMXN(watchedMonthlyCapacity || 0)}</span>
+                        <span className="font-semibold">{formatMXN(Number(watchedMonthlyCapacity) || 0)}</span>
                       </div>
                       <div className="flex justify-between">
                         <span className="text-gray-700">Capacidad 40%:</span>

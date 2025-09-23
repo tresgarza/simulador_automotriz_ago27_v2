@@ -13,7 +13,7 @@ export function UserMenu() {
   const handleLogout = () => {
     logout();
     setIsOpen(false);
-    window.location.reload(); // Refresh para actualizar el estado
+    // El hook useAuth ahora maneja la recarga automáticamente
   };
 
   const getUserTypeLabel = () => {
@@ -108,10 +108,12 @@ export function UserMenu() {
                 </>
               )}
               
-              <button className="w-full flex items-center space-x-3 px-3 py-2 text-gray-700 hover:bg-gray-50 rounded-xl transition-colors">
-                <FileText className="w-4 h-4" />
-                <span>Mis Cotizaciones</span>
-              </button>
+              <Link href="/mis-cotizaciones" onClick={() => setIsOpen(false)}>
+                <button className="w-full flex items-center space-x-3 px-3 py-2 text-gray-700 hover:bg-gray-50 rounded-xl transition-colors">
+                  <FileText className="w-4 h-4" />
+                  <span>Mis Cotizaciones</span>
+                </button>
+              </Link>
               
               <div className="border-t border-gray-100 my-2"></div>
               

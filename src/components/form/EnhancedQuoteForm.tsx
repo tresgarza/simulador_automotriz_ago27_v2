@@ -20,6 +20,7 @@ const BaseFormSchemaCore = z.object({
     .min(0, "El monto del seguro no puede ser negativo")
     .max(500000, "El monto del seguro no puede exceder $500,000"),
   commission_mode: z.enum(["cash", "financed"]),
+  no_vehicle_yet: z.boolean().optional(),
 });
 
 // Schema con refinamientos para validaciones de negocio
@@ -61,8 +62,8 @@ const ClientFormSchemaBase = BaseFormSchemaCore.extend({
     .max(50, "El modelo no puede exceder 50 caracteres")
     .optional(),
   vehicle_year: z.coerce.number()
-    .min(1900, "El año debe ser posterior a 1900")
-    .max(new Date().getFullYear() + 1, "El año no puede ser muy futuro")
+    .min(2000, "El año debe ser posterior a 2000")
+    .max(2026, "El año no puede ser mayor a 2026")
     .optional(),
 
   // Agencia donde compra el vehículo
@@ -97,13 +98,19 @@ const ClientFormSchema = ClientFormSchemaBase.refine((data) => {
 
 const AgencyFormSchemaBase = BaseFormSchemaCore.extend({
   client_name: z.string()
-    .min(2, "El nombre del cliente es requerido")
     .max(100, "El nombre no puede exceder 100 caracteres")
-    .regex(/^[a-zA-ZÀ-ÿ\s]+$/, "El nombre solo puede contener letras y espacios"),
+    .optional()
+    .or(z.literal(""))
+    .refine((val) => !val || /^[a-zA-ZÀ-ÿ\s]+$/.test(val), {
+      message: "El nombre solo puede contener letras y espacios"
+    }),
   client_phone: z.string()
-    .min(10, "El teléfono debe tener al menos 10 dígitos")
     .max(20, "El teléfono no puede exceder 20 caracteres")
-    .regex(/^[\d\s\-\+\(\)]+$/, "El teléfono solo puede contener números, espacios, guiones, paréntesis y el símbolo +"),
+    .optional()
+    .or(z.literal(""))
+    .refine((val) => !val || /^[\d\s\-\+\(\)]+$/.test(val), {
+      message: "El teléfono solo puede contener números, espacios, guiones, paréntesis y el símbolo +"
+    }),
   client_email: z.string()
     .max(100, "El email no puede exceder 100 caracteres")
     .optional()
@@ -122,16 +129,13 @@ const AgencyFormSchemaBase = BaseFormSchemaCore.extend({
   vehicle_model: z.string()
     .max(50, "El modelo no puede exceder 50 caracteres")
     .optional(),
-  vehicle_year: z.coerce.number()
-    .min(1900, "El año debe ser posterior a 1900")
-    .max(new Date().getFullYear() + 1, "El año no puede ser muy futuro")
-    .optional(),
+  vehicle_year: z.coerce.number().optional(),
 
   // Checkboxes
   no_vehicle_yet: z.boolean().optional(),
 });
 
-// Aplicar refinamientos después de la extensión
+// Aplicar refinamientos después de la extensión - IGUAL QUE ASESOR
 const AgencyFormSchema = AgencyFormSchemaBase.refine((data) => {
   // Validar que el enganche sea al menos 30% del valor del vehículo
   const minDownPayment = data.vehicle_value * 0.30;
@@ -163,6 +167,8 @@ const AsesorFormSchemaBase = BaseFormSchemaCore.extend({
   vehicle_usage: z.string().optional(),
   vehicle_origin: z.string().optional(),
   serial_number: z.string().optional(),
+  // Checkboxes
+  no_vehicle_yet: z.boolean().optional(),
 });
 
 // Aplicar refinamientos después de la extensión
@@ -217,6 +223,7 @@ export function EnhancedQuoteForm({ onSubmit, isSubmitting, hasResults = false }
   const { user, isAsesor, isAgency, isClient } = useAuth();
   const [noVehicleYet, setNoVehicleYet] = useState(false);
   const [isHydrated, setIsHydrated] = useState(false);
+  const [currentUser, setCurrentUser] = useState<any>(null);
   
   // Determinar el schema según el tipo de usuario
   const getFormSchema = () => {
@@ -269,17 +276,46 @@ export function EnhancedQuoteForm({ onSubmit, isSubmitting, hasResults = false }
     }
   };
 
+  // Cargar usuario actual desde localStorage
+  useEffect(() => {
+    const savedUser = localStorage.getItem('current_user')
+    if (savedUser) {
+      try {
+        const userData = JSON.parse(savedUser)
+        setCurrentUser(userData)
+        console.log('👤 Usuario cargado para pre-llenar formulario:', userData)
+      } catch (error) {
+        console.error('Error parsing saved user:', error)
+      }
+    }
+  }, [])
+
   // Efecto para manejar la hidratación
   useEffect(() => {
     setIsHydrated(true);
   }, []);
 
-  // NO auto-completar datos del cliente para ASESORES ni AGENCIAS
-  // Ambos tipos de usuario deben capturar datos del cliente real
+  // Pre-llenar datos del usuario logueado (solo para clientes)
   useEffect(() => {
-    // Auto-completado deshabilitado para mantener consistencia
-    // Tanto asesores como agencias capturan datos del cliente real
-  }, [user, setValue, isAsesor, isAgency]);
+    if (currentUser && currentUser.user_type === 'client') {
+      console.log('📝 Pre-llenando datos del cliente logueado:', currentUser)
+      
+      // Pre-llenar nombre
+      if (currentUser.name) {
+        setValue("client_name", currentUser.name)
+      }
+      
+      // Pre-llenar teléfono
+      if (currentUser.phone) {
+        setValue("client_phone", currentUser.phone)
+      }
+      
+      // Pre-llenar email
+      if (currentUser.email) {
+        setValue("client_email", currentUser.email)
+      }
+    }
+  }, [currentUser, setValue]);
 
   return (
     <div className="relative">
@@ -287,7 +323,15 @@ export function EnhancedQuoteForm({ onSubmit, isSubmitting, hasResults = false }
       <div className="bg-white/95 backdrop-blur-lg border border-gray-200/60 rounded-3xl p-6 md:p-8 shadow-2xl">
         <div className="absolute inset-0 bg-gradient-to-br from-gray-50/80 to-white/60 rounded-3xl"></div>
         
-        <form onSubmit={handleSubmit(onSubmit)} className="relative z-10 space-y-6 md:space-y-8">
+        <form onSubmit={handleSubmit((data) => {
+          console.log('🔍 Form data being submitted:', data);
+          console.log('🔍 Form errors:', errors);
+          console.log('🔍 User type:', { isAsesor, isAgency, isClient });
+          console.log('🔍 noVehicleYet:', noVehicleYet);
+          return onSubmit(data);
+        }, (errors) => {
+          console.error('❌ Form validation errors:', errors);
+        })} className="relative z-10 space-y-6 md:space-y-8">
           {/* Header */}
           <div className="text-center mb-6 md:mb-8">
             <div className="inline-flex items-center justify-center w-14 h-14 md:w-16 md:h-16 bg-gradient-to-br from-emerald-500 to-cyan-600 rounded-2xl mb-4 shadow-lg">
@@ -309,16 +353,23 @@ export function EnhancedQuoteForm({ onSubmit, isSubmitting, hasResults = false }
 
           {/* Datos del Cliente - Solo si no es cliente anónimo */}
           {isHydrated && !isClient && (
-            <div className="bg-blue-50 border border-blue-200 rounded-2xl p-6 space-y-4">
-              <h3 className="text-lg font-semibold text-blue-800 flex items-center">
-                <User className="w-5 h-5 mr-2" />
-                Datos del Cliente
-              </h3>
+            <div className={`border rounded-2xl p-6 space-y-4 ${noVehicleYet ? 'bg-gray-50 border-gray-200' : 'bg-blue-50 border-blue-200'}`}>
+              <div className="flex items-center justify-between">
+                <h3 className={`text-lg font-semibold flex items-center ${noVehicleYet ? 'text-gray-600' : 'text-blue-800'}`}>
+                  <User className="w-5 h-5 mr-2" />
+                  Datos del Cliente
+                </h3>
+                {isAgency && noVehicleYet && (
+                  <span className="text-xs bg-gray-200 text-gray-600 px-2 py-1 rounded-full">
+                    Opcional
+                  </span>
+                )}
+              </div>
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Nombre Completo *
+                    Nombre Completo {!isAgency || !noVehicleYet ? '*' : ''}
                   </label>
                   <input
                     type="text"
@@ -333,7 +384,7 @@ export function EnhancedQuoteForm({ onSubmit, isSubmitting, hasResults = false }
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Teléfono *
+                    Teléfono {!isAgency || !noVehicleYet ? '*' : ''}
                   </label>
                   <div className="relative">
                     <Phone className="absolute left-3 top-1/2 transform -translate-y-1/2 w-5 h-5 text-gray-400" />
@@ -580,8 +631,16 @@ export function EnhancedQuoteForm({ onSubmit, isSubmitting, hasResults = false }
                     type="checkbox"
                     checked={noVehicleYet}
                     onChange={(e) => {
-                      setNoVehicleYet(e.target.checked);
-                      setValue("no_vehicle_yet", e.target.checked);
+                      const isChecked = e.target.checked;
+                      setNoVehicleYet(isChecked);
+                      setValue("no_vehicle_yet", isChecked);
+                      
+                      // Si marca "no tiene vehículo aún", limpiar los campos del vehículo
+                      if (isChecked) {
+                        setValue("vehicle_brand", "");
+                        setValue("vehicle_model", "");
+                        setValue("vehicle_year", "");
+                      }
                     }}
                     className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                   />
@@ -622,20 +681,31 @@ export function EnhancedQuoteForm({ onSubmit, isSubmitting, hasResults = false }
                   </label>
                   <input
                     type="number"
+                    min="2000"
+                    max="2026"
                     disabled={noVehicleYet}
                     className="w-full px-4 py-3 border border-gray-300 rounded-2xl focus:ring-4 focus:ring-blue-300/50 focus:border-blue-400 disabled:bg-gray-100"
-                    placeholder="2024"
+                    placeholder="2025"
                     {...register("vehicle_year")}
                   />
                 </div>
               </div>
 
               {noVehicleYet && (
-                <div className="bg-blue-100 border border-blue-300 rounded-xl p-4">
-                  <p className="text-blue-800 text-sm">
-                    💡 El cliente puede hacer la simulación sin tener el vehículo específico. 
-                    Los datos del vehículo son opcionales para obtener la cotización.
+                <div className="bg-green-100 border border-green-300 rounded-xl p-4">
+                  <p className="text-green-800 text-sm font-medium mb-2">
+                    ✅ Perfecto! Puedes calcular los planes sin vehículo específico.
                   </p>
+                  <p className="text-green-700 text-sm">
+                    <strong>Solo necesitas:</strong> Valor del vehículo, Enganche, Seguro y Comisión.
+                    <br />
+                    <strong>Opcionales:</strong> Datos del cliente, Marca, Modelo y Año del vehículo.
+                  </p>
+                  <div className="mt-3 p-2 bg-green-50 rounded-lg">
+                    <p className="text-green-800 text-xs font-medium">
+                      💡 Los datos del cliente se pueden agregar después para generar documentos oficiales.
+                    </p>
+                  </div>
                 </div>
               )}
             </div>

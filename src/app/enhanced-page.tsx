@@ -192,6 +192,11 @@ export default function EnhancedHome() {
       const availableTerms = AuthService.getAvailableTerms();
       const terms: Term[] = availableTerms as Term[];
       
+      // Debug logs
+      console.log('🔍 Debug Enhanced - User:', user);
+      console.log('🔍 Debug Enhanced - Available rates:', availableRates);
+      console.log('🔍 Debug Enhanced - Available terms:', availableTerms);
+      
       const tierPromises = availableRates.map(async (tier) => {
         const termResults = await Promise.all(
           terms.map(async (term) => {
@@ -218,7 +223,15 @@ export default function EnhancedHome() {
               headers: { "content-type": "application/json" }, 
               body: JSON.stringify(body) 
             });
+            
+            if (!res.ok) {
+              console.error(`❌ Enhanced API Error for tier ${tier}, term ${term}:`, res.status, res.statusText);
+              const errorText = await res.text();
+              console.error('Enhanced Error details:', errorText);
+            }
+            
             const json = await res.json();
+            console.log(`✅ Enhanced API Success for tier ${tier}, term ${term}:`, json.summary?.pmt_total_month2);
             return [term, json] as const;
           })
         );

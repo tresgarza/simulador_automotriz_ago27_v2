@@ -198,7 +198,7 @@ const AuthorizationSchema = z.object({
   dealership: z.string().min(1, "La agencia es requerida"),
   vehicle_brand: z.string().min(1, "La marca es requerida"),
   vehicle_model: z.string().min(1, "El modelo es requerido"),
-  vehicle_year: z.coerce.number().min(2000, "El año debe ser mayor a 2000"),
+  vehicle_year: z.coerce.number().min(2000, "El año debe ser mayor a 2000").max(2026, "El año no puede ser mayor a 2026"),
   sale_value: z.coerce.number().min(0, "El valor de venta no puede ser negativo"),
   book_value: z.coerce.number().min(0, "El valor de libro azul no puede ser negativo"),
   
@@ -339,6 +339,37 @@ export function AuthorizationForm({ request, onClose }: AuthorizationFormProps) 
   });
 
   const watchedData = watch();
+
+  // Calcular pago mensual basado en la tasa de interés actual
+  const calculateMonthlyPayment = (principal: number, annualRate: number, termMonths: number): number => {
+    if (!principal || !annualRate || !termMonths) return 0;
+    
+    const monthlyRate = (annualRate / 100) / 12;
+    if (monthlyRate === 0) return principal / termMonths;
+    
+    const payment = principal * (monthlyRate * Math.pow(1 + monthlyRate, termMonths)) / 
+                   (Math.pow(1 + monthlyRate, termMonths) - 1);
+    return Math.round(payment * 100) / 100;
+  };
+
+  const calculatedMonthlyPayment = calculateMonthlyPayment(
+    Number(watchedData.requested_amount) || 0,
+    Number(watchedData.interest_rate) || 45,
+    Number(watchedData.term_months) || 48
+  );
+
+  // Efecto para actualizar la capacidad de pago cuando cambie la tasa
+  useEffect(() => {
+    if (watchedData.interest_rate && watchedData.requested_amount && watchedData.term_months) {
+      const newPayment = calculateMonthlyPayment(
+        Number(watchedData.requested_amount),
+        Number(watchedData.interest_rate),
+        Number(watchedData.term_months)
+      );
+      setValue("monthly_capacity", newPayment);
+      setValue("monthly_discount", newPayment);
+    }
+  }, [watchedData.interest_rate, watchedData.requested_amount, watchedData.term_months, setValue]);
 
   // Auto-guardado simplificado
   const autoSaveForm = useCallback(async (data: any, showStatus: boolean = true) => {

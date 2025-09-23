@@ -1,3 +1,4 @@
+import { useState, useEffect } from 'react'
 import { supabase, User } from './supabase'
 
 // Tipos para autenticación
@@ -93,10 +94,68 @@ export class AuthService {
     }
   }
 
-  // Logout
+  // Verificar sesión con el servidor
+  static async verifySession(): Promise<{ valid: boolean; user?: AuthUser }> {
+    const currentUser = AuthService.getCurrentUser()
+    if (!currentUser) {
+      return { valid: false }
+    }
+
+    try {
+      const response = await fetch('/api/auth/verify', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userId: currentUser.id,
+          userType: currentUser.user_type,
+          email: currentUser.email
+        })
+      })
+
+      if (!response.ok) {
+        // Si la verificación falla, limpiar la sesión local
+        AuthService.logout()
+        return { valid: false }
+      }
+
+      const result = await response.json()
+      
+      // Actualizar datos del usuario si han cambiado
+      if (result.user && JSON.stringify(result.user) !== JSON.stringify(currentUser)) {
+        localStorage.setItem('auth_user', JSON.stringify(result.user))
+      }
+
+      return { valid: true, user: result.user }
+    } catch (error) {
+      console.error('Error verifying session:', error)
+      // En caso de error de red, mantener la sesión pero marcar como no verificada
+      return { valid: false }
+    }
+  }
+
+  // Logout - Clear all session data
   static logout(): void {
     if (typeof window !== 'undefined') {
+      // Clear all auth-related localStorage items
       localStorage.removeItem('auth_user')
+      localStorage.removeItem('user_session')
+      localStorage.removeItem('user_preferences')
+      localStorage.removeItem('cached_rates')
+      localStorage.removeItem('cached_simulations')
+      
+      // Clear sessionStorage as well
+      sessionStorage.clear()
+      
+      // Clear any cookies related to auth
+      document.cookie.split(";").forEach((c) => {
+        const eqPos = c.indexOf("=")
+        const name = eqPos > -1 ? c.substr(0, eqPos) : c
+        if (name.trim().startsWith('auth_') || name.trim().startsWith('user_') || name.trim().startsWith('session_')) {
+          document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`
+        }
+      })
     }
   }
 
@@ -172,6 +231,56 @@ export class AuthService {
 
 // Hook para usar en componentes React
 export function useAuth() {
+  const [user, setUser] = useState<AuthUser | null>(null)
+  const [isVerified, setIsVerified] = useState(false)
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return
+
+    // Obtener usuario inicial
+    const currentUser = AuthService.getCurrentUser()
+    setUser(currentUser)
+
+    // Verificar sesión con el servidor al cargar
+    if (currentUser) {
+      AuthService.verifySession().then(({ valid, user: verifiedUser }) => {
+        setIsVerified(valid)
+        if (valid && verifiedUser) {
+          setUser(verifiedUser)
+        } else if (!valid) {
+          setUser(null)
+        }
+      })
+    }
+
+    // Verificar sesión periódicamente (cada 5 minutos)
+    const verificationInterval = setInterval(() => {
+      const currentUser = AuthService.getCurrentUser()
+      if (currentUser) {
+        AuthService.verifySession().then(({ valid, user: verifiedUser }) => {
+          setIsVerified(valid)
+          if (valid && verifiedUser) {
+            setUser(verifiedUser)
+          } else if (!valid) {
+            setUser(null)
+            // Recargar la página para limpiar el estado
+            window.location.reload()
+          }
+        })
+      }
+    }, 5 * 60 * 1000) // 5 minutos
+
+    return () => clearInterval(verificationInterval)
+  }, [])
+
+  const logout = () => {
+    AuthService.logout()
+    setUser(null)
+    setIsVerified(false)
+    // Recargar la página para limpiar completamente el estado
+    window.location.reload()
+  }
+
   if (typeof window === 'undefined') {
     // SSR defaults
     return {
@@ -182,20 +291,20 @@ export function useAuth() {
       isClient: true,
       hasPermission: () => false,
       getAvailableRates: () => ['C'],
-      logout: () => {}
+      logout: () => {},
+      isVerified: false
     }
   }
-  
-  const user = AuthService.getCurrentUser()
   
   return {
     user,
     isLoggedIn: !!user,
-    isAsesor: AuthService.isAsesor(),
-    isAgency: AuthService.isAgency(),
-    isClient: AuthService.isClient(),
-    hasPermission: AuthService.hasPermission,
+    isAsesor: user?.user_type === 'asesor',
+    isAgency: user?.user_type === 'agency',
+    isClient: !user,
+    hasPermission: (permission: string) => user?.permissions?.includes(permission) || false,
     getAvailableRates: AuthService.getAvailableRates,
-    logout: AuthService.logout
+    logout,
+    isVerified
   }
 }
