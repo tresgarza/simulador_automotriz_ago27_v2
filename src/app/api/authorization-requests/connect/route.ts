@@ -33,7 +33,11 @@ export async function POST(request: NextRequest) {
           vehicle_brand,
           vehicle_model,
           vehicle_year,
-          vehicle_value
+          vehicle_value,
+          down_payment_amount,
+          insurance_amount,
+          insurance_mode,
+          vendor_name
         )
       `)
       .eq('tier_code', tier_code)

@@ -233,6 +233,15 @@ export const IdentitySection = ({ formData, onChange, errors }: SectionProps) =>
         />
 
         <FormInput
+          label="Homoclave (separada)"
+          name="rfc_homoclave"
+          value={formData.rfc_homoclave}
+          onChange={(value) => onChange('rfc_homoclave', value.toUpperCase())}
+          error={errors.rfc_homoclave}
+          placeholder="3 caracteres"
+        />
+
+        <FormInput
           label="NSS"
           name="nss"
           value={formData.nss}
@@ -266,6 +275,15 @@ export const IdentitySection = ({ formData, onChange, errors }: SectionProps) =>
         />
 
         <FormInput
+          label="País de Nacimiento"
+          name="birth_country"
+          value={formData.birth_country}
+          onChange={(value) => onChange('birth_country', value)}
+          error={errors.birth_country}
+          placeholder="Ej: México"
+        />
+
+        <FormInput
           label="Nacionalidad"
           name="nationality"
           value={formData.nationality}
@@ -296,6 +314,25 @@ export const IdentitySection = ({ formData, onChange, errors }: SectionProps) =>
             { value: 'Licenciatura', label: 'Licenciatura' },
             { value: 'Posgrado', label: 'Posgrado' }
           ]}
+        />
+
+        <FormInput
+          label="Serie de Firma Electrónica Avanzada"
+          name="electronic_signature_series"
+          value={formData.electronic_signature_series}
+          onChange={(value) => onChange('electronic_signature_series', value.toUpperCase())}
+          error={errors.electronic_signature_series}
+          placeholder="Serie FIEL"
+        />
+
+        <FormInput
+          label="Número de Dependientes Económicos"
+          name="dependents_count"
+          type="number"
+          value={formData.dependents_count?.toString() || ''}
+          onChange={(value) => onChange('dependents_count', value ? parseInt(value) : undefined)}
+          error={errors.dependents_count}
+          placeholder="0"
         />
       </div>
     </div>
@@ -341,6 +378,16 @@ export const IdentitySection = ({ formData, onChange, errors }: SectionProps) =>
           value={formData.landline_phone}
           onChange={(value) => onChange('landline_phone', value)}
           error={errors.landline_phone}
+          placeholder="Con LADA (ej: 5512345678)"
+        />
+
+        <FormInput
+          label="Teléfono de Recados con Clave LADA"
+          name="emergency_phone"
+          type="tel"
+          value={formData.emergency_phone}
+          onChange={(value) => onChange('emergency_phone', value)}
+          error={errors.emergency_phone}
           placeholder="Con LADA (ej: 5512345678)"
         />
       </div>
@@ -438,6 +485,15 @@ export const IdentitySection = ({ formData, onChange, errors }: SectionProps) =>
           error={errors.residence_years}
           placeholder="Años viviendo en esta dirección"
         />
+
+        <FormInput
+          label="País"
+          name="country"
+          value={formData.country}
+          onChange={(value) => onChange('country', value)}
+          error={errors.country}
+          placeholder="México"
+        />
       </div>
     </div>
   </div>
@@ -462,6 +518,24 @@ export const EmploymentSection = ({ formData, onChange, errors }: SectionProps) 
       onChange={(value) => onChange('job_position', value)}
       error={errors.job_position}
       required
+    />
+
+    <FormInput
+      label="Ocupación"
+      name="occupation"
+      value={formData.occupation}
+      onChange={(value) => onChange('occupation', value)}
+      error={errors.occupation}
+      placeholder="Ej: Contador, Ingeniero, etc."
+    />
+
+    <FormInput
+      label="Jefe Inmediato"
+      name="immediate_supervisor"
+      value={formData.immediate_supervisor}
+      onChange={(value) => onChange('immediate_supervisor', value)}
+      error={errors.immediate_supervisor}
+      placeholder="Nombre del jefe directo"
     />
 
     <FormInput

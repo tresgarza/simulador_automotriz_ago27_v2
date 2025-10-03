@@ -9,7 +9,7 @@ export interface AuthorizationRequest {
   id: string
   simulation_id?: string | null
   quote_id?: string | null
-  status: 'pending' | 'in_review' | 'advisor_approved' | 'internal_committee' | 'partners_committee' | 'approved' | 'rejected' | 'cancelled'
+  status: 'pending' | 'in_review' | 'advisor_approved' | 'internal_committee' | 'partners_committee' | 'approved' | 'dispersed' | 'rejected' | 'cancelled'
     priority: 'low' | 'medium' | 'high' | 'urgent'
   risk_level: 'low' | 'medium' | 'high'
   client_name?: string
@@ -45,6 +45,8 @@ export interface AuthorizationRequest {
   partners_committee_reviewed_at?: string
   approved_at?: string
   rejected_at?: string
+  dispersed_at?: string
+  dispersed_by?: string
   ip_address?: string
   user_agent?: string
 }

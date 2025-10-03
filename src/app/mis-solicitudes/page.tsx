@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { CreditApplicationService, CreditApplication } from '../../lib/credit-application-service'
 import { GuestSessionService } from '../../lib/guest-session-service'
 import { useAuth } from '../../../lib/auth'
@@ -27,18 +27,38 @@ export default function MisSolicitudesPage() {
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [isAuthenticated, setIsAuthenticated] = useState(false)
   const [isInitialized, setIsInitialized] = useState(false)
+  
+  // Protección contra React Strict Mode - evitar ejecuciones múltiples
+  const authCheckExecutedRef = useRef(false)
+  const loadApplicationsExecutedRef = useRef(false)
 
   useEffect(() => {
+    // PROTECCIÓN: Solo ejecutar una vez, incluso en React Strict Mode
+    if (authCheckExecutedRef.current) {
+      console.log('🚫 Auth check ya ejecutado - saltando')
+      return
+    }
+    authCheckExecutedRef.current = true
+    
     // Verificar autenticación
     const checkAuthentication = async () => {
       console.log('🔐 Verificando autenticación...')
       
-      // Verificar si hay usuario en localStorage
+      // Verificar si hay usuario en localStorage O en el hook useAuth
       const savedUser = localStorage.getItem('current_user')
-      if (savedUser) {
+      const authUser = user
+      
+      if (savedUser || authUser) {
         try {
-          const localUser = JSON.parse(savedUser)
-          console.log('👤 Usuario encontrado en localStorage:', localUser.name)
+          let localUser = null
+          if (savedUser) {
+            localUser = JSON.parse(savedUser)
+            console.log('👤 Usuario encontrado en localStorage:', localUser.name)
+          } else if (authUser) {
+            localUser = authUser
+            console.log('👤 Usuario encontrado en auth hook:', (authUser as any)?.user_metadata?.full_name || authUser.id)
+          }
+          
           setCurrentUser(localUser)
           setIsAuthenticated(true)
           setHasGuestSession(true) // Para compatibilidad
@@ -51,7 +71,7 @@ export default function MisSolicitudesPage() {
           setCurrentUser(null)
         }
       } else {
-        console.log('❌ No hay usuario en localStorage')
+        console.log('❌ No hay usuario en localStorage ni en auth')
         setIsAuthenticated(false)
         
         // Limpiar estado inmediatamente cuando no hay usuario
@@ -74,12 +94,20 @@ export default function MisSolicitudesPage() {
   // Efecto separado para cargar aplicaciones solo cuando esté autenticado
   useEffect(() => {
     if (isAuthenticated && (currentUser || user)) {
+      // PROTECCIÓN: Solo ejecutar una vez por cambio de estado
+      if (loadApplicationsExecutedRef.current) {
+        console.log('🚫 Load applications ya ejecutado - saltando')
+        return
+      }
+      loadApplicationsExecutedRef.current = true
+      
       console.log('🔄 Cargando solicitudes para usuario autenticado')
       loadApplications()
     } else if (!isAuthenticated) {
       console.log('❌ Usuario no autenticado - limpiando solicitudes')
       setApplications([])
       setError(null)
+      loadApplicationsExecutedRef.current = false // Reset para permitir próxima carga
     }
   }, [isAuthenticated, currentUser, user])
 
@@ -120,7 +148,8 @@ export default function MisSolicitudesPage() {
       const { applications: apps, error, claimed_count } = await CreditApplicationService.getCurrentUserApplications(
         userId, 
         userEmail, 
-        userName
+        userName,
+        true // Siempre intentar reclamar - el endpoint ahora es inteligente
       )
       
       if (error) {

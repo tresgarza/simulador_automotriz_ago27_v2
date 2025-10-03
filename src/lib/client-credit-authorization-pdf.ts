@@ -103,11 +103,18 @@ export const generateClientCreditAuthorizationPDF = async (data: ClientCreditAut
   const money = (v: number = 0) => new Intl.NumberFormat('es-MX', { style: 'currency', currency: 'MXN' }).format(Number(v) || 0);
   const dateMx = (d: Date = new Date()) => d.toLocaleDateString('es-MX', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
   
+  // Función para normalizar nombres (Title Case)
+  const toTitleCase = (str: string): string => {
+    if (!str) return str;
+    return str.toLowerCase().replace(/\b\w/g, (char) => char.toUpperCase());
+  };
+  
   const FOOTER_H = 22;
   
   const blockHeight = (lines: string | string[], size = 10) => {
     pdf.setFontSize(size);
-    return pdf.getTextDimensions(lines).h;
+    const text = Array.isArray(lines) ? lines.join('\n') : lines;
+    return pdf.getTextDimensions(text).h;
   };
   
   const ensureSpace = (need: number) => {
@@ -356,7 +363,7 @@ export const generateClientCreditAuthorizationPDF = async (data: ClientCreditAut
   pdf.setFont('helvetica', 'bold');
   pdf.setFontSize(11);
   pdf.setTextColor(...FIN.black);
-  pdf.text(`Estimada/o ${data.client.name}:`, M, currentY);
+  pdf.text(`Estimada/o ${toTitleCase(data.client.name)}:`, M, currentY);
   currentY += S4;
 
   // Dirección (si existe)
@@ -372,7 +379,7 @@ export const generateClientCreditAuthorizationPDF = async (data: ClientCreditAut
   // Párrafo de introducción (justificado)
   const introText = `Por medio de la presente, y con base en la evaluación realizada por nuestro comité de crédito, nos es grato informarle que su solicitud de crédito automotriz ha sido aprobada bajo las siguientes condiciones:`;
   
-  justifyParagraph(introText, M, pageWidth - 2*M, { size: 11, before: 0, after: 8 });
+  justifyParagraph(introText, M, pageWidth - 2*M, { size: 10, before: 0, after: 8 });
 
   // Cálculo de pago mensual (si falta)
   const P = data.credit.requested_amount - (data.credit.down_payment || 0);
@@ -390,7 +397,7 @@ export const generateClientCreditAuthorizationPDF = async (data: ClientCreditAut
   const creditConditions = [
     ["Monto Autorizado", money(data.credit.requested_amount)],
     ["Plazo", `${data.credit.term_months} meses`],
-    ["Tasa de Interés Anual Fija", `${data.credit.interest_rate_annual}%`],
+    ["Tasa de Interés Mensual", `${(data.credit.interest_rate_annual / 12).toFixed(2)}%`],
     ["Modalidad de Seguro", insuranceText],
     ["Pago Mensual", money(monthlyPayment)],
   ];
@@ -400,15 +407,23 @@ export const generateClientCreditAuthorizationPDF = async (data: ClientCreditAut
   }
 
   const vehicleData = [
-    ["Marca", data.vehicle.brand],
-    ["Modelo", data.vehicle.model],
+    ["Marca", toTitleCase(data.vehicle.brand)],
+    ["Modelo", toTitleCase(data.vehicle.model)],
     ["Año", data.vehicle.year.toString()],
     ["Valor", money(data.vehicle.agency_value)]
   ];
 
   if (data.agency?.name) {
-    vehicleData.push(["Agencia", data.agency.name]);
+    vehicleData.push(["Agencia", toTitleCase(data.agency.name)]);
   }
+
+  // Datos bancarios para transferencia
+  const bankingData = [
+    ["Beneficiario", "Banco Banorte"],
+    ["Cuenta", "0 653 215 428"],
+    ["Cuenta Clabe", "072 580 006 532 154 280"],
+    ["Razón Social", "Financiera Incentiva SAPI de CV Sofom ENR"]
+  ];
 
   // --- Títulos por columna (cada uno en su X) ---
   const leftX = M;
@@ -427,43 +442,46 @@ export const generateClientCreditAuthorizationPDF = async (data: ClientCreditAut
   currentY += 6;
 
   // --- Estimar altura y decidir lado-a-lado vs apiladas ---
-  const estRowH = 6.2; // ~ densidad 9pt + padding
-  const estCredito = 10 + (creditConditions.length + 1) * estRowH; // +1 header
-  const estVeh = 10 + (vehicleData.length + 1) * estRowH;
+  const estRowH = 5.0; // ~ densidad 8pt + padding reducido
+  const estCredito = 8 + (creditConditions.length + 1) * estRowH; // +1 header
+  const estVeh = 8 + (vehicleData.length + 1) * estRowH;
   const canSide = (currentY + Math.max(estCredito, estVeh) <= pageHeight - FOOTER_H);
 
   const autoTableBase = {
-    theme: 'plain',
+    theme: 'plain' as const,
     head: [['Concepto','Detalle']],
     styles: { 
       font: 'helvetica', 
-      fontSize: 9, 
-      cellPadding: 2, 
+      fontSize: 8, 
+      cellPadding: 1.5, 
       lineWidth: 0.2, 
-      lineColor: FIN.grayMid, 
+      lineColor: FIN.grayMid as [number, number, number], 
       overflow: 'linebreak', 
       valign: 'middle' 
     },
-    headStyles: { fillColor: FIN.grayLight, textColor: FIN.black, fontStyle: 'bold' },
+    headStyles: { fillColor: FIN.grayLight as [number, number, number], textColor: FIN.black as [number, number, number], fontStyle: 'bold', fontSize: 8 },
     columnStyles: {
       0: { cellWidth: 40 }, // Concepto fijo
       1: { halign: 'left' } // Detalle ocupa el resto
     },
-    rowPageBreak: 'avoid',
-    showHead: 'everyPage',
-    alternateRowStyles: { fillColor: [250,250,250] },
+    rowPageBreak: 'avoid' as const,
+    showHead: 'everyPage' as const,
+    alternateRowStyles: { fillColor: [250,250,250] as [number, number, number] },
     didParseCell: (d:any) => {
-      // Columna de montos a la derecha cuando detalle es número MXN
-      if (d.section==='body' && d.column.index===1) {
-        const raw = String(d.cell.raw ?? '');
-        if (/^\$[\d.,]+/.test(raw)) d.cell.styles.halign = 'right';
-      }
-      // Resaltar filas clave
+      // Resaltar filas clave y alinear montos específicos a la izquierda
       if (d.section==='body' && d.column.index===1) {
         const label = String(d.row.raw?.[0] ?? '');
-        if (label === 'Monto Autorizado' || label === 'Pago Mensual') {
+        const raw = String(d.cell.raw ?? '');
+        
+        // Campos específicos que deben ir alineados a la izquierda
+        if (label === 'Monto Autorizado' || label === 'Pago Mensual' || label === 'Valor') {
           d.cell.styles.fontStyle = 'bold';
-          d.cell.styles.textColor = FIN.primaryDark;
+          d.cell.styles.textColor = FIN.primaryDark as [number, number, number];
+          d.cell.styles.halign = 'left'; // Alinear a la izquierda
+        }
+        // Otros montos mantienen alineación a la derecha
+        else if (/^\$[\d.,]+/.test(raw)) {
+          d.cell.styles.halign = 'right';
         }
       }
     }
@@ -487,10 +505,27 @@ export const generateClientCreditAuthorizationPDF = async (data: ClientCreditAut
       body: vehicleData,
       didParseCell: (d:any) => {
         autoTableBase.didParseCell?.(d);
-        // Asegurar que 'Valor' se alinee a la derecha
-        if (d.section==='body' && d.column.index===1 && String(d.row.raw?.[0])==='Valor') {
-          d.cell.styles.halign = 'right';
-          d.cell.styles.fontStyle = 'bold';
+        // 'Valor' ya se maneja en autoTableBase.didParseCell, no necesitamos sobreescribir aquí
+      }
+    });
+    return (pdf as any).lastAutoTable.finalY as number;
+  };
+
+  const drawBankingTable = (startY:number, left:number) => {
+    autoTable(pdf, {
+      ...autoTableBase,
+      startY,
+      margin: { left, right: pageWidth - (left + COL) },
+      body: bankingData,
+      didParseCell: (d:any) => {
+        autoTableBase.didParseCell?.(d);
+        // Resaltar datos bancarios importantes
+        if (d.section==='body' && d.column.index===1) {
+          const label = String(d.row.raw?.[0] ?? '');
+          if (label === 'Cuenta Clabe' || label === 'Cuenta') {
+            d.cell.styles.fontStyle = 'bold';
+            d.cell.styles.textColor = FIN.primaryDark as [number, number, number];
+          }
         }
       }
     });
@@ -500,59 +535,81 @@ export const generateClientCreditAuthorizationPDF = async (data: ClientCreditAut
   if (!canSide) {
     // --- Apiladas ---
     const fy1 = drawCreditTable(currentY, leftX);
-    currentY = (fy1 || currentY) + 8;
+    currentY = (fy1 || currentY) + 6;
     const fy2 = drawVehicleTable(currentY, leftX);
-    currentY = (fy2 || currentY) + 12;
+    currentY = (fy2 || currentY) + 8;
   } else {
     // --- Lado a lado con misma línea base ---
     const startY = currentY;
     const fyL = drawCreditTable(startY, leftX);
     const fyR = drawVehicleTable(startY, rightX);
-    currentY = Math.max(fyL, fyR) + 8;
+    currentY = Math.max(fyL, fyR) + 6;
   }
 
-  // Siguientes pasos (justificado)
+  // Espacio adicional antes de la tabla de datos bancarios
+  currentY += 8;
+
+  // Agregar título y tabla de datos bancarios (centrados)
+  pdf.setFont('helvetica','bold'); 
+  pdf.setFontSize(11);
+  pdf.setTextColor(...FIN.black);
+  pdf.text('Datos para transferencia bancaria', pageWidth/2, currentY, { align: 'center' });
+  currentY += 6;
+  pdf.setDrawColor(...FIN.grayMid); 
+  pdf.setLineWidth(0.2);
+  const lineStartX = (pageWidth - COL) / 2;
+  pdf.line(lineStartX, currentY, lineStartX + COL, currentY);
+  currentY += 6;
+
+  // Dibujar tabla de datos bancarios (centrada)
+  const bankingTableWidth = COL; // Usar el mismo ancho que las otras tablas
+  const centerX = (pageWidth - bankingTableWidth) / 2; // Centrar la tabla
+  const fy3 = drawBankingTable(currentY, centerX);
+  currentY = (fy3 || currentY) + 6;
+
+  // Siguientes pasos (justificado) - espaciado reducido
   justifyParagraph(
     `El siguiente paso es contactar a la agencia y realizar el pago del enganche. Posteriormente, coordinaremos la firma del contrato. Y con eso, ¡ya estarías lista para recibir tu nuevo auto!`,
     M, pageWidth - 2*M, 
-    { size: 10, before: 0, after: S4 }
+    { size: 10, before: 0, after: 4 }
   );
 
-  // Vigencia (destacada, justificada)
+  // Vigencia (destacada, justificada) - espaciado reducido
   const validUntilDate = new Date(data.valid_until);
   justifyParagraph(
     `Esta autorización tiene vigencia hasta el ${dateMx(validUntilDate)}.`,
     M, pageWidth - 2*M,
-    { size: 10, before: 0, after: S4 }
+    { size: 10, before: 0, after: 4 }
   );
 
-  // Disclaimer legal (justificado)
+  // Disclaimer legal (justificado) - espaciado muy reducido
   justifyParagraph(
     `Esta carta se emite con base en la evaluación crediticia; sujeta a validación documental y firma de contrato. Tasa fija; condiciones económicas pueden ajustar si cambian variables del vehículo, seguro o plazos. No constituye obligación de contratar.`,
     M, pageWidth - 2*M,
-    { size: 8, color: FIN.gray, before: 0, after: S5 }
+    { size: 8, color: FIN.gray, before: 0, after: 4 }
   );
 
-  // --- Cierre y firma ---
+  // --- Cierre y firma --- espaciado muy reducido para que quepa en primera hoja
   pdf.setFont('helvetica','normal'); 
   pdf.setFontSize(10);
   pdf.setTextColor(...FIN.black);
   pdf.text('Sin más por el momento, reciba un cordial saludo.', pageWidth/2, currentY, { align: 'center' });
-  currentY += 8;
+  currentY += 4;
   pdf.text('Atentamente,', pageWidth/2, currentY, { align: 'center' });
-  currentY += 6;
+  currentY += 3;
 
+  // Firma más compacta para que quepa en la primera hoja
   await drawSignatureBlock({
     imgSrc: '/firma_digital_adolfo.png',
     name: 'Adolfo Medina',
     role: 'Director General',
-    imgH: 36,
+    imgH: 24, // Reducir altura de imagen para ahorrar espacio
   });
 
   // Footer en la última página
   drawFooterOnLastPage();
 
   // Guardar PDF
-  const fileName = `carta_autorizacion_${data.client.name.replace(/\s+/g, '_')}_${data.authorization.id.substring(0, 8)}_${today.getFullYear()}${(today.getMonth() + 1).toString().padStart(2, '0')}${today.getDate().toString().padStart(2, '0')}.pdf`;
+  const fileName = `carta_autorizacion_${toTitleCase(data.client.name).replace(/\s+/g, '_')}_${data.authorization.id.substring(0, 8)}_${today.getFullYear()}${(today.getMonth() + 1).toString().padStart(2, '0')}${today.getDate().toString().padStart(2, '0')}.pdf`;
   pdf.save(fileName);
 };

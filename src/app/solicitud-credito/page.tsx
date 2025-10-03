@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, Suspense } from 'react'
+import React, { useState, useEffect, Suspense } from 'react'
 import { useSearchParams } from 'next/navigation'
 import { CreditApplicationForm } from '../../components/credit-application/CreditApplicationForm'
 import { CreditApplicationService } from '../../lib/credit-application-service'
@@ -17,6 +17,26 @@ function SolicitudCreditoContent() {
   const simulationId = searchParams.get('simulation_id')
   const applicationId = searchParams.get('application_id') // Para continuar solicitudes
   
+  // NUEVOS PARÁMETROS desde el portal de autorizaciones
+  const clientName = searchParams.get('client_name')
+  const clientEmail = searchParams.get('client_email')
+  const clientPhone = searchParams.get('client_phone')
+  
+  // NUEVOS PARÁMETROS financieros desde el portal de autorizaciones
+  const vehicleBrand = searchParams.get('vehicle_brand')
+  const vehicleModel = searchParams.get('vehicle_model')
+  const vehicleYear = searchParams.get('vehicle_year')
+  const vehicleValue = searchParams.get('vehicle_value')
+  const requestedAmount = searchParams.get('requested_amount')
+  const monthlyPayment = searchParams.get('monthly_payment')
+  const termMonths = searchParams.get('term_months')
+  const agencyName = searchParams.get('agency_name')
+  
+  // NUEVOS PARÁMETROS del enganche y seguro
+  const downPaymentAmount = searchParams.get('down_payment_amount')
+  const insuranceAmount = searchParams.get('insurance_amount')
+  const insuranceMode = searchParams.get('insurance_mode')
+  
   const [prefillData, setPrefillData] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [applicationSubmitted, setApplicationSubmitted] = useState(false)
@@ -27,6 +47,27 @@ function SolicitudCreditoContent() {
   const [showRegistrationModal, setShowRegistrationModal] = useState(false)
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [needsRegistration, setNeedsRegistration] = useState(true)
+  const prefillFetchedRef = React.useRef(false) // Prevenir fetch múltiple de prefill
+
+  console.log('🔍 [DEBUG] SolicitudCreditoPage - Parámetros recibidos:', {
+    quoteId,
+    simulationId,
+    applicationId,
+    clientName,
+    clientEmail,
+    clientPhone,
+    vehicleBrand,
+    vehicleModel,
+    vehicleYear,
+    vehicleValue,
+    requestedAmount,
+    monthlyPayment,
+    termMonths,
+    agencyName,
+    downPaymentAmount,
+    insuranceAmount,
+    insuranceMode
+  })
 
   // Cargar solicitud existente si hay applicationId
   useEffect(() => {
@@ -44,24 +85,186 @@ function SolicitudCreditoContent() {
     }
   }, [applicationId])
 
-  // Pre-llenar datos si hay quoteId (solo si no hay applicationId)
+  // Pre-llenar datos - PRIORIDAD: applicationId > quoteId+simulationId > parámetros directos
   useEffect(() => {
-    console.log('🔍 [DEBUG] SolicitudCreditoPage useEffect - quoteId:', quoteId, 'applicationId:', applicationId)
+    console.log('🔍 [DEBUG] SolicitudCreditoPage useEffect - Evaluando pre-llenado:', {
+      applicationId,
+      quoteId,
+      simulationId,
+      hasDirectParams: !!(clientName || clientEmail || clientPhone || vehicleBrand || requestedAmount || downPaymentAmount || insuranceAmount),
+      prefillFetchedRef: prefillFetchedRef.current
+    })
     
-    if (quoteId && !applicationId) {
-      console.log('🔄 Obteniendo datos de pre-llenado para quoteId:', quoteId)
+    // Caso 1: Si hay applicationId, ya se maneja en otro useEffect
+    if (applicationId) {
+      console.log('📋 Usando applicationId existente, saltando pre-llenado')
+      return
+    }
+    
+    // Caso 2: Si hay quoteId, usar el servicio de pre-llenado existente
+    if (quoteId && !prefillFetchedRef.current) {
+      console.log('🔄 Pre-llenando desde quoteId:', quoteId, 'simulationId:', simulationId)
+      
+      prefillFetchedRef.current = true
       setIsLoading(true)
+      
       CreditApplicationService.prefillFromQuote(quoteId, simulationId || undefined).then(({ data, error }) => {
         if (data && !error) {
-          console.log('✅ Datos de pre-llenado obtenidos en página:', data)
+          console.log('✅ Datos de pre-llenado obtenidos desde quote:', {
+            vehicle_brand: data.vehicle_brand,
+            vehicle_model: data.vehicle_model,
+            vehicle_year: data.vehicle_year,
+            vehicle_value: data.vehicle_value,
+            requested_amount: data.requested_amount,
+            term_months: data.term_months,
+            monthly_payment: data.monthly_payment,
+            down_payment_amount: data.down_payment_amount,
+            insurance_amount: data.insurance_amount
+          })
+          
+          // Sobrescribir con parámetros directos si están disponibles
+          if (clientName || clientEmail || clientPhone || vehicleBrand || requestedAmount || downPaymentAmount || insuranceAmount) {
+            console.log('🔄 Sobrescribiendo con parámetros directos del portal de autorizaciones')
+            
+            // Datos del cliente
+            if (clientName) data.first_names = clientName
+            if (clientEmail) data.personal_email = clientEmail
+            if (clientPhone) data.mobile_phone = clientPhone
+            
+            // Datos del vehículo
+            if (vehicleBrand) data.vehicle_brand = vehicleBrand
+            if (vehicleModel) data.vehicle_model = vehicleModel
+            if (vehicleYear) data.vehicle_year = parseInt(vehicleYear)
+            if (vehicleValue) data.vehicle_value = parseFloat(vehicleValue)
+            
+            // Datos financieros
+            if (requestedAmount) data.requested_amount = parseFloat(requestedAmount)
+            if (monthlyPayment) data.monthly_payment = parseFloat(monthlyPayment)
+            if (termMonths) data.term_months = parseInt(termMonths)
+            
+            // NUEVOS: Datos del enganche y seguro
+            if (downPaymentAmount) data.down_payment_amount = parseFloat(downPaymentAmount)
+            if (insuranceAmount) data.insurance_amount = parseFloat(insuranceAmount)
+            if (insuranceMode) data.insurance_mode = insuranceMode as 'cash' | 'financed'
+            
+            // Datos de la agencia
+            if (agencyName) {
+              data.branch = agencyName
+              data.branch_office = agencyName
+            }
+          }
+          
           setPrefillData(data)
         } else if (error) {
-          console.error('❌ Error obteniendo datos de pre-llenado:', error)
+          console.error('❌ Error obteniendo datos de pre-llenado desde quote:', error)
+          
+          // Si falla el pre-llenado desde quote, usar parámetros directos
+          if (clientName || clientEmail || clientPhone || vehicleBrand || requestedAmount || downPaymentAmount || insuranceAmount) {
+            console.log('🔄 Usando solo parámetros directos como fallback')
+            setPrefillData(createDirectPrefillData())
+          }
         }
         setIsLoading(false)
       })
     }
-  }, [quoteId, simulationId, applicationId])
+    // Caso 3: Solo parámetros directos (sin quoteId) - BUSCAR SOLICITUD EXISTENTE PRIMERO
+    else if (!quoteId && (clientName || clientEmail || clientPhone || vehicleBrand || requestedAmount || downPaymentAmount || insuranceAmount) && !prefillFetchedRef.current) {
+      console.log('🔍 Buscando solicitud existente antes de crear nueva:', {
+        clientEmail,
+        clientName,
+        clientPhone
+      })
+      
+      prefillFetchedRef.current = true
+      setIsLoading(true)
+      
+      // Buscar solicitud existente por email
+      if (clientEmail) {
+        CreditApplicationService.getCurrentUserApplications(undefined, undefined, undefined, false).then(({ applications }) => {
+          const existingApp = applications?.find((app: any) => 
+            app.personal_email === clientEmail && 
+            app.status === 'draft' &&
+            (app.first_names?.toLowerCase().includes(clientName?.toLowerCase() || '') || 
+             app.mobile_phone === clientPhone)
+          )
+          
+          if (existingApp) {
+            console.log('✅ Solicitud existente encontrada, cargando datos:', existingApp.folio_number)
+            // En lugar de recargar, cargar los datos directamente
+            CreditApplicationService.getCreditApplication(existingApp.id).then((appData) => {
+              if (appData) {
+                setPrefillData(appData)
+                setIsLoading(false)
+              } else {
+                // Si no se puede cargar, usar parámetros directos
+                console.log('📝 No se pudo cargar solicitud existente, usando parámetros directos')
+                setPrefillData(createDirectPrefillData())
+                setIsLoading(false)
+              }
+            }).catch(() => {
+              console.log('📝 Error cargando solicitud existente, usando parámetros directos')
+              setPrefillData(createDirectPrefillData())
+              setIsLoading(false)
+            })
+          } else {
+            console.log('📝 No se encontró solicitud existente, pre-llenando con parámetros directos')
+            setPrefillData(createDirectPrefillData())
+            setIsLoading(false)
+          }
+        }).catch(error => {
+          console.error('Error buscando solicitudes existentes:', error)
+          console.log('📝 Error en búsqueda, pre-llenando con parámetros directos')
+          setPrefillData(createDirectPrefillData())
+          setIsLoading(false)
+        })
+      } else {
+        console.log('📝 Sin email para buscar, pre-llenando con parámetros directos')
+        setPrefillData(createDirectPrefillData())
+        setIsLoading(false)
+      }
+    }
+  }, [quoteId, simulationId, applicationId, clientName, clientEmail, clientPhone, vehicleBrand, vehicleModel, vehicleYear, vehicleValue, requestedAmount, monthlyPayment, termMonths, agencyName, downPaymentAmount, insuranceAmount, insuranceMode])
+
+  // Función helper para crear prefillData desde parámetros directos
+  const createDirectPrefillData = () => {
+    return {
+      // Datos básicos
+      product_type: 'Auto',
+      payment_frequency: 'mensual',
+      nationality: 'Mexicana',
+      birth_country: 'México',
+      
+      // Datos del cliente
+      first_names: clientName || '',
+      personal_email: clientEmail || '',
+      mobile_phone: clientPhone || '',
+      
+      // Datos del vehículo
+      vehicle_brand: vehicleBrand || '',
+      vehicle_model: vehicleModel || '',
+      vehicle_year: vehicleYear ? parseInt(vehicleYear) : undefined,
+      vehicle_value: vehicleValue ? parseFloat(vehicleValue) : undefined,
+      
+      // Datos financieros
+      requested_amount: requestedAmount ? parseFloat(requestedAmount) : undefined,
+      monthly_payment: monthlyPayment ? parseFloat(monthlyPayment) : undefined,
+      term_months: termMonths ? parseInt(termMonths) : undefined,
+      
+      // NUEVOS: Datos del enganche y seguro
+      down_payment_amount: downPaymentAmount ? parseFloat(downPaymentAmount) : undefined,
+      insurance_amount: insuranceAmount ? parseFloat(insuranceAmount) : undefined,
+      insurance_mode: insuranceMode as 'cash' | 'financed' || 'cash',
+      
+      // Datos de la agencia
+      branch: agencyName || '',
+      branch_office: agencyName || '',
+      
+      // Descripción del recurso
+      resource_usage: vehicleBrand && vehicleModel && vehicleYear 
+        ? `Compra de ${vehicleBrand} ${vehicleModel} ${vehicleYear}`
+        : 'Compra de vehículo'
+    }
+  }
 
   // Verificar si necesita registro al cargar la página
   useEffect(() => {

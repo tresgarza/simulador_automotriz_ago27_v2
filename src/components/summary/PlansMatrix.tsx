@@ -66,7 +66,7 @@ interface PlansMatrixProps {
   dealerAgency?: string;
   // IDs para tracking
   currentQuoteId?: string | null;
-  selectedSimulationId?: string | null;
+  simulationMap?: Record<string, string>;
 }
 
 const tierConfig = [
@@ -164,7 +164,7 @@ export function PlansMatrix({
   vendorName,
   dealerAgency,
   currentQuoteId,
-  selectedSimulationId
+  simulationMap
 }: PlansMatrixProps) {
   const { isAsesor, isAgency, user } = useAuth();
   const router = useRouter();
@@ -197,22 +197,43 @@ export function PlansMatrix({
 
   // Función para redirigir a la página de solicitud de crédito
   const handleRedirectToCreditApplication = () => {
-    console.log('🔄 Redirigiendo a solicitud de crédito con parámetros:', {
-      quoteId: currentQuoteId,
-      simulationId: selectedSimulationId
-    });
+    console.log('========================================');
+    console.log('🚀 INICIANDO REDIRECCIÓN A SOLICITUD DE CRÉDITO');
+    console.log('========================================');
+    console.log('📋 Parámetros actuales:');
+    console.log('  - currentQuoteId:', currentQuoteId);
+    
+    // Obtener simulation_id actual del mapa
+    const simKey = `${effectiveTier}-${selectedTerm}`;
+    const currentSimulationId = simulationMap?.[simKey] || null;
+    console.log('  - currentSimulationId:', currentSimulationId);
+    console.log('  - Tier seleccionado:', effectiveTier);
+    console.log('  - Plazo seleccionado:', selectedTerm);
+    
+    // Validar que tengamos los datos necesarios
+    if (!currentQuoteId) {
+      console.error('❌ ERROR: No hay currentQuoteId disponible');
+      alert('Error: No se pudo obtener el ID de la cotización. Por favor, intenta nuevamente.');
+      return;
+    }
+    
+    if (!currentSimulationId) {
+      console.warn('⚠️ ADVERTENCIA: No hay simulationId disponible para esta combinación');
+      console.warn('  Esto significa que la simulación puede no haberse guardado correctamente');
+    }
     
     // Construir URL con parámetros para pre-llenar
     const params = new URLSearchParams();
     if (currentQuoteId) {
       params.append('quote_id', currentQuoteId);
     }
-    if (selectedSimulationId) {
-      params.append('simulation_id', selectedSimulationId);
+    if (currentSimulationId) {
+      params.append('simulation_id', currentSimulationId);
     }
     
     const url = `/solicitud-credito${params.toString() ? `?${params.toString()}` : ''}`;
-    console.log('🔗 URL de redirección:', url);
+    console.log('🔗 URL de redirección completa:', url);
+    console.log('========================================');
     
     router.push(url);
   };
@@ -312,10 +333,14 @@ export function PlansMatrix({
     exportScheduleXLSX(rows);
 
     // Tracking de la exportación (si tenemos IDs)
-    if (selectedSimulationId && currentQuoteId) {
+    const simKey = `${effectiveTier}-${selectedTerm}`;
+    const currentSimulationId = simulationMap?.[simKey] || null;
+    
+    if (currentSimulationId && currentQuoteId) {
       try {
+        
         const trackingData = {
-          simulation_id: selectedSimulationId,
+          simulation_id: currentSimulationId,
           quote_id: currentQuoteId,
           export_type: 'excel',
           file_name: fileName,
@@ -349,10 +374,14 @@ export function PlansMatrix({
     await navigator.clipboard.writeText(jsonData);
 
     // Tracking de la exportación (si tenemos IDs)
-    if (selectedSimulationId && currentQuoteId) {
+    const simKey = `${effectiveTier}-${selectedTerm}`;
+    const currentSimulationId = simulationMap?.[simKey] || null;
+    
+    if (currentSimulationId && currentQuoteId) {
       try {
+        
         const trackingData = {
-          simulation_id: selectedSimulationId,
+          simulation_id: currentSimulationId,
           quote_id: currentQuoteId,
           export_type: 'json',
           file_name: fileName,
@@ -413,10 +442,11 @@ export function PlansMatrix({
         vendorName: finalVendorName,
         dealerAgency: finalDealerAgency,
         // IDs para tracking
-        simulationId: selectedSimulationId || undefined,
+        simulationId: simulationMap?.[`${effectiveTier}-${selectedTerm}`] || undefined,
         quoteId: currentQuoteId || undefined,
         generatedByUserId: user?.id
       };
+      
       await generateProfessionalPDF(pdfData);
     } catch (error) {
       console.error('Error generating PDF:', error);
@@ -440,45 +470,29 @@ export function PlansMatrix({
   const handleRequestAuthorization = async () => {
     setIsRequestingAuthorization(true);
     try {
-      console.log('🔍 IDs disponibles:', { selectedSimulationId, currentQuoteId });
+      // Obtener el simulation_id del mapa basado en la selección actual
+      const simKey = `${effectiveTier}-${selectedTerm}`;
+      const finalSimulationId = simulationMap?.[simKey] || null;
+      const finalQuoteId = currentQuoteId;
       
-      // Intentar encontrar los IDs correctos basados en la selección actual
-      let finalSimulationId = selectedSimulationId;
-      let finalQuoteId = currentQuoteId;
-      
-      // Si no tenemos IDs, intentar buscarlos en base al cliente y selección
+      // ⚠️ VALIDACIÓN OBLIGATORIA: No permitir crear solicitud sin simulación
       if (!finalSimulationId || !finalQuoteId) {
-        console.log('🔍 Buscando IDs de simulación para:', { 
-          clientName, 
-          selectedTier, 
-          selectedTerm, 
-          vehicleBrand, 
-          vehicleModel 
-        });
-        
-        // Buscar la simulación más reciente que coincida
-        try {
-          const searchResponse = await fetch(`/api/simulations/find?client_name=${encodeURIComponent(clientName || '')}&tier=${selectedTier}&term=${selectedTerm}&vehicle_brand=${encodeURIComponent(vehicleBrand || '')}`);
-          
-          if (searchResponse.ok) {
-            const searchResult = await searchResponse.json();
-            if (searchResult.simulation_id) {
-              finalSimulationId = searchResult.simulation_id;
-              finalQuoteId = searchResult.quote_id;
-              console.log('✅ IDs encontrados via API:', { finalSimulationId, finalQuoteId });
-            }
-          }
-        } catch (error) {
-          console.warn('⚠️ Error buscando IDs:', error);
-        }
+        alert('❌ Error: No se puede crear la solicitud de autorización\n\n' +
+              'La simulación seleccionada no está guardada en el sistema.\n\n' +
+              'Por favor:\n' +
+              '1. Asegúrate de hacer clic en "Confirmar Selección" primero\n' +
+              '2. Espera a que se guarde la cotización\n' +
+              '3. Luego intenta solicitar autorización nuevamente');
+        setIsRequestingAuthorization(false);
+        return;
       }
       
-      // Crear solicitud con IDs reales o básica como fallback
+      // Crear solicitud SOLO con IDs válidos
       const authRequest = {
         simulation_id: finalSimulationId,
         quote_id: finalQuoteId,
-        priority: finalSimulationId ? 'medium' : 'high', // Alta prioridad si no hay simulación
-        client_comments: `Solicitud de autorización para ${selectedTier}-${selectedTerm} meses. Datos del vehículo: ${vehicleBrand} ${vehicleModel} ${vehicleYear}. Valor: $${vehicleValue?.toLocaleString()}`,
+        priority: 'medium',
+        client_comments: `Solicitud de autorización para Tier ${effectiveTier} (tasa ${effectiveTier === 'A' ? '36%' : effectiveTier === 'B' ? '40%' : '45%'}) - ${selectedTerm} meses. Vehículo: ${vehicleBrand} ${vehicleModel} ${vehicleYear}. Valor: $${vehicleValue?.toLocaleString()}`,
         risk_level: 'medium',
         created_by_user_id: user?.id,
         // Datos básicos disponibles
@@ -494,12 +508,8 @@ export function PlansMatrix({
         term_months: selectedTerm,
         agency_name: dealerAgency || vendorName,
         dealer_name: vendorName,
-        internal_notes: finalSimulationId 
-          ? `Solicitud conectada a simulación ${finalSimulationId}`
-          : 'Solicitud creada sin simulación guardada - requiere revisión manual'
+        internal_notes: `Solicitud conectada a simulación ${finalSimulationId} (Tier ${effectiveTier}, ${selectedTerm} meses) y cotización ${finalQuoteId}`
       };
-
-      console.log('📤 Enviando solicitud con datos:', authRequest);
 
       const response = await fetch('/api/authorization-requests', {
         method: 'POST',
@@ -515,24 +525,11 @@ export function PlansMatrix({
         throw new Error(result.error || 'Error al crear solicitud de autorización');
       }
 
-      console.log('✅ Solicitud de autorización creada:', result.authorization_request);
       setIsAuthorizationSent(true);
       
-      if (finalSimulationId) {
-        alert(`✅ Solicitud de autorización enviada exitosamente!
-        
-ID: ${result.authorization_request?.id}
-Simulación: ${finalSimulationId}
-Cotización: ${finalQuoteId}
-        
-Será revisada por un asesor.`);
-      } else {
-        alert('✅ Solicitud de autorización enviada exitosamente! Será revisada por un asesor.');
-      }
-      
     } catch (error) {
-      console.error('❌ Error creating authorization request:', error);
-      alert('Error al crear la solicitud de autorización: ' + (error as Error).message);
+      console.error('Error al crear autorización:', error);
+      alert('Error al crear la solicitud de autorización');
     } finally {
       setIsRequestingAuthorization(false);
     }
@@ -905,10 +902,9 @@ Será revisada por un asesor.`);
             <div className="overflow-y-auto max-h-[calc(90vh-120px)]">
               <CreditApplicationForm
                 quoteId={currentQuoteId || undefined}
-                simulationId={selectedSimulationId || undefined}
+                simulationId={simulationMap?.[`${effectiveTier}-${selectedTerm}`] || undefined}
                 onSuccess={(application) => {
                   setShowCreditApplicationForm(false)
-                  alert(`Solicitud enviada exitosamente. Folio: ${application.folio_number}`)
                 }}
                 onCancel={() => setShowCreditApplicationForm(false)}
               />

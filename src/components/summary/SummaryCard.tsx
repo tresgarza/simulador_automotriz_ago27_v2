@@ -64,7 +64,7 @@ interface SummaryCardProps {
   dealerAgency?: string;
   // IDs para tracking
   currentQuoteId?: string | null;
-  selectedSimulationId?: string | null;
+  simulationMap?: Record<string, string>;
 }
 
 export function SummaryCard({
@@ -84,7 +84,7 @@ export function SummaryCard({
   vendorName,
   dealerAgency,
   currentQuoteId,
-  selectedSimulationId
+  simulationMap
 }: SummaryCardProps) {
   if (!result) {
     return (
@@ -118,7 +118,7 @@ export function SummaryCard({
       vendorName={vendorName}
       dealerAgency={dealerAgency}
       currentQuoteId={currentQuoteId}
-      selectedSimulationId={selectedSimulationId}
+      simulationMap={simulationMap}
     />
   );
 }

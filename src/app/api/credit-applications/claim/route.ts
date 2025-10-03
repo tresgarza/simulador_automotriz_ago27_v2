@@ -24,6 +24,53 @@ export async function POST(request: NextRequest) {
       user_name
     })
 
+    // VERIFICACIÓN PREVIA: Si el usuario ya tiene solicitudes, NO reclamar
+    const { data: existingApps, error: checkError } = await supabaseClient
+      .from('z_auto_credit_applications')
+      .select('id')
+      .eq('created_by_user_id', user_id)
+      .limit(1)
+
+    if (checkError) {
+      console.error('❌ Error verificando solicitudes existentes:', checkError)
+    } else if (existingApps && existingApps.length > 0) {
+      console.log('🚫 Usuario ya tiene solicitudes asignadas - saltando reclamación')
+      
+      // Obtener las solicitudes actualizadas del usuario sin reclamar
+      const { data: userApplications, error: fetchError } = await supabaseClient
+        .from('z_auto_credit_applications')
+        .select(`
+          *,
+          z_auto_quotes!quote_id (
+            id,
+            client_name,
+            client_email,
+            client_phone,
+            vehicle_brand,
+            vehicle_model,
+            vehicle_year,
+            vehicle_value
+          ),
+          z_auto_simulations!simulation_id (
+            id,
+            tier_code,
+            term_months,
+            monthly_payment,
+            total_to_finance
+          )
+        `)
+        .eq('created_by_user_id', user_id)
+        .order('created_at', { ascending: false })
+
+      return NextResponse.json({
+        success: true,
+        claimed_count: 0, // No se reclamó nada
+        claimed_details: [],
+        user_applications: userApplications || [],
+        message: 'Usuario ya tiene solicitudes asignadas - no se reclamó nada'
+      })
+    }
+
     // Paso 1: Intentar reclamar por email exacto o similar
     const { data: claimedByEmail, error: claimError } = await supabaseClient
       .rpc('claim_user_applications', {

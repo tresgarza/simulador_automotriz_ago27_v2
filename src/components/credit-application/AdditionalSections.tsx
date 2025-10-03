@@ -73,6 +73,31 @@ const FormInput = ({
         />
         <span className="ml-2 text-sm text-gray-700">{placeholder}</span>
       </div>
+    ) : type === 'radio' ? (
+      <div className="flex gap-6">
+        <label className="flex items-center">
+          <input
+            type="radio"
+            name={name}
+            value="true"
+            checked={value === true}
+            onChange={() => onChange(true)}
+            className="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300"
+          />
+          <span className="ml-2 text-sm text-gray-700">SÍ</span>
+        </label>
+        <label className="flex items-center">
+          <input
+            type="radio"
+            name={name}
+            value="false"
+            checked={value === false}
+            onChange={() => onChange(false)}
+            className="h-4 w-4 text-green-600 focus:ring-green-500 border-gray-300"
+          />
+          <span className="ml-2 text-sm text-gray-700">NO</span>
+        </label>
+      </div>
     ) : (
       <input
         type={type}
@@ -142,15 +167,19 @@ export const DeclarationsSection = ({ formData, onChange, errors }: SectionProps
     <div className="border border-gray-200 rounded-lg p-4">
       <h3 className="text-lg font-medium text-gray-900 mb-4">Declaración PEP (Persona Expuesta Políticamente)</h3>
       
-      <FormInput
-        label=""
-        name="is_pep"
-        type="checkbox"
-        value={formData.is_pep}
-        onChange={(value) => onChange('is_pep', value)}
-        error={errors.is_pep}
-        placeholder="He desempeñado funciones públicas destacadas en los últimos 2 años"
-      />
+      <div className="mb-4">
+        <p className="text-sm text-gray-700 mb-3">
+          ¿Usted desempeña o ha desempeñado funciones públicas destacadas en un país extranjero o en territorio nacional, considerado entre otros, a los jefes de estado o de gobierno, líderes políticos, funcionarios gubernamentales, judiciales o militares de alta jerarquía, altos ejecutivos de empresas estatales o funcionarios o miembros importantes de partidos políticos?
+        </p>
+        <FormInput
+          label="Respuesta:"
+          name="is_pep"
+          type="radio"
+          value={formData.is_pep}
+          onChange={(value) => onChange('is_pep', value)}
+          error={errors.is_pep}
+        />
+      </div>
 
       {formData.is_pep && (
         <div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -175,15 +204,17 @@ export const DeclarationsSection = ({ formData, onChange, errors }: SectionProps
         </div>
       )}
 
-      <div className="mt-4">
+      <div className="mt-6">
+        <p className="text-sm text-gray-700 mb-3">
+          ¿Algún familiar de usted de hasta segundo grado de consanguinidad o afinidad (cónyuge, concubina, padre, madre, hijos, hermanos, abuelos, tíos, primos, cuñados, suegros, yernos o nueras), se encuentra en el supuesto antes mencionado?
+        </p>
         <FormInput
-          label=""
+          label="Respuesta:"
           name="has_pep_relative"
-          type="checkbox"
+          type="radio"
           value={formData.has_pep_relative}
           onChange={(value) => onChange('has_pep_relative', value)}
           error={errors.has_pep_relative}
-          placeholder="Tengo familiares hasta segundo grado que han desempeñado funciones públicas destacadas"
         />
 
         {formData.has_pep_relative && (

@@ -1,6 +1,6 @@
 "use client";
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { FileCheck, Users, Search, Filter, Eye, CheckCircle, XCircle, Clock, ChevronRight, Grid, List, Trash2, UserCheck, AlertTriangle, Calendar, User, Home, LogOut, Building2, TrendingUp, Activity } from "lucide-react";
+import { FileCheck, Users, Search, Filter, Eye, CheckCircle, XCircle, Clock, ChevronRight, Grid, List, Trash2, UserCheck, AlertTriangle, Calendar, User, Home, LogOut, Building2, TrendingUp, Activity, FileText, Download, DollarSign } from "lucide-react";
 import Link from "next/link";
 import { useAuth } from "../../../lib/auth";
 import { SimulationService, SimulationWithQuote } from "../../../lib/simulation-service";
@@ -10,6 +10,7 @@ import { formatMXN, cn } from "@/lib/utils";
 import { AuthorizationForm, calculateFormProgress } from "../../components/authorization/AuthorizationFormFullscreen";
 import { generateProfessionalAuthorizationPDF, ProfessionalAuthorizationData } from "../../lib/professional-authorization-pdf";
 import { generateClientCreditAuthorizationPDF, ClientCreditAuthorizationData } from "../../lib/client-credit-authorization-pdf";
+import { generateProfessionalPDF } from "../../components/pdf/ProfessionalPDFGenerator";
 
 interface ExtendedAuthorizationRequest extends ServiceAuthorizationRequest {
   simulation?: SimulationWithQuote | null;
@@ -30,13 +31,14 @@ export default function AutorizacionesPage() {
   const [filteredRequests, setFilteredRequests] = useState<ExtendedAuthorizationRequest[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
-  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'in_review' | 'advisor_approved' | 'internal_committee' | 'partners_committee' | 'approved' | 'rejected' | 'cancelled'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'in_review' | 'advisor_approved' | 'internal_committee' | 'partners_committee' | 'approved' | 'dispersed' | 'rejected' | 'cancelled'>('all');
   const [selectedRequest, setSelectedRequest] = useState<ExtendedAuthorizationRequest | null>(null);
   const [showAuthorizationForm, setShowAuthorizationForm] = useState(false);
   const [isHydrated, setIsHydrated] = useState(false);
   const [isLoadingData, setIsLoadingData] = useState(false);
   const [authDetermined, setAuthDetermined] = useState(false);
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards'); // Default to cards view
+  const [existingApplications, setExistingApplications] = useState<{[key: string]: any}>({});
   const hasInitiatedLoading = useRef(false);
 
   // Handle hydration
@@ -94,22 +96,8 @@ export default function AutorizacionesPage() {
         throw new Error(result.error || 'Error al cargar solicitudes de autorización');
       }
 
-      // Debug: Log de datos del API antes del mapeo
-      console.log('🔍 API Response - First Request:', {
-        first_request: result.authorization_requests[0],
-        simulation_data: result.authorization_requests[0]?.z_auto_simulations,
-        pmt_total_month2: result.authorization_requests[0]?.z_auto_simulations?.pmt_total_month2
-      });
-
       // Transformar los datos para que coincidan con la interfaz ExtendedAuthorizationRequest
       const authorizationRequests: ExtendedAuthorizationRequest[] = result.authorization_requests.map((authReq: any) => {
-        console.log('🔄 Mapping request:', {
-          id: authReq.id,
-          has_simulation: !!authReq.z_auto_simulations,
-          pmt_total_month2_raw: authReq.z_auto_simulations?.pmt_total_month2,
-          monthly_payment_raw: authReq.z_auto_simulations?.monthly_payment
-        });
-        
         return {
         id: authReq.id,
         simulation: authReq.z_auto_simulations ? {
@@ -120,6 +108,13 @@ export default function AutorizacionesPage() {
           pmt_total_month2: authReq.z_auto_simulations.pmt_total_month2,
           total_to_finance: authReq.z_auto_simulations.total_to_finance,
           financed_amount: authReq.z_auto_simulations.financed_amount,
+          opening_fee: authReq.z_auto_simulations.opening_fee,
+          opening_fee_iva: authReq.z_auto_simulations.opening_fee_iva,
+          initial_outlay: authReq.z_auto_simulations.initial_outlay,
+          pmt_base: authReq.z_auto_simulations.pmt_base,
+          first_payment_date: authReq.z_auto_simulations.first_payment_date,
+          last_payment_date: authReq.z_auto_simulations.last_payment_date,
+          amortization_schedule: authReq.z_auto_simulations.amortization_schedule, // 🔑 CRÍTICO para PDFs
           calculated_at: authReq.z_auto_simulations.calculated_at,
           quote: authReq.z_auto_quotes ? {
             id: authReq.z_auto_quotes.id,
@@ -130,6 +125,11 @@ export default function AutorizacionesPage() {
             vehicle_model: authReq.z_auto_quotes.vehicle_model,
             vehicle_year: authReq.z_auto_quotes.vehicle_year,
             vehicle_value: authReq.z_auto_quotes.vehicle_value,
+            down_payment_amount: authReq.z_auto_quotes.down_payment_amount,
+            insurance_amount: authReq.z_auto_quotes.insurance_amount,
+            insurance_mode: authReq.z_auto_quotes.insurance_mode,
+            commission_mode: authReq.z_auto_quotes.commission_mode, // 🔑 También necesario
+            vendor_name: authReq.z_auto_quotes.vendor_name,
             created_at: authReq.z_auto_quotes.created_at
           } : null
         } : null,
@@ -236,22 +236,17 @@ export default function AutorizacionesPage() {
         return;
       }
       
-      console.log('🎯 Reclamando solicitud:', { requestId, advisorId: user.id });
-      
       const result = await AuthorizationService.claimAuthorizationRequest(requestId, user.id);
       
       if (result.success) {
         console.log('✅ Solicitud reclamada exitosamente');
         loadAuthorizationRequests(); // Recargar datos
-        
-        // Mostrar mensaje de éxito más informativo
-        alert(`✅ Solicitud reclamada exitosamente!\n\n• Ahora está asignada a ti\n• Puedes completar el formulario de autorización\n• Estado cambiado a "En Revisión"`);
       } else {
         console.error('❌ Error al reclamar:', result.error);
         alert('Error al reclamar la solicitud: ' + result.error);
       }
     } catch (error) {
-      console.error('💥 Exception al reclamar solicitud:', error);
+      console.error('Error al reclamar solicitud:', error);
       alert('Error al reclamar la solicitud: ' + (error as Error).message);
     }
   };
@@ -337,8 +332,6 @@ export default function AutorizacionesPage() {
       
       if (!confirm(confirmMessage)) return;
       
-      console.log('✅ Aprobando como asesor y enviando a comité:', { requestId, userId: user.id, advisorNotes });
-      
       // Usar la API REST directamente para cambiar estado a internal_committee
       const { request: updatedRequest, error } = await AuthorizationService.updateAuthorizationRequest(requestId, {
         status: 'internal_committee',
@@ -348,11 +341,9 @@ export default function AutorizacionesPage() {
       });
       
       if (!error) {
-        console.log('✅ Solicitud aprobada por asesor y enviada al comité interno');
-        loadAuthorizationRequests(); // Recargar datos
-        alert(`✅ Solicitud aprobada y enviada al Comité Interno!\n\n• Estado: "En Comité Interno"\n• Puede seguir editando si el comité solicita cambios\n• Recibirá notificación de la decisión final`);
+        loadAuthorizationRequests();
       } else {
-        console.error('❌ Error al aprobar como asesor:', error);
+        console.error('Error al aprobar:', error);
         alert('Error al aprobar como asesor: ' + error);
       }
     } catch (error) {
@@ -383,8 +374,6 @@ export default function AutorizacionesPage() {
       
       if (!confirm(confirmMessage)) return;
       
-      console.log(`🏛️ Comité interno ${action}:`, { requestId, userId: user.id, notes });
-      
       if (approve) {
         // Aprobar y enviar a comité de socios usando API REST
         const { request: updatedRequest, error } = await AuthorizationService.updateAuthorizationRequest(requestId, {
@@ -396,7 +385,6 @@ export default function AutorizacionesPage() {
         
         if (!error) {
           loadAuthorizationRequests();
-          alert(`✅ Solicitud aprobada por Comité Interno!\n\n• Estado cambiado a "En Comité de Socios"\n• Última etapa antes de aprobación final`);
         } else {
           alert('Error al aprobar en comité interno: ' + error);
         }
@@ -406,14 +394,13 @@ export default function AutorizacionesPage() {
         
         if (result.success) {
           loadAuthorizationRequests();
-          alert(`❌ Solicitud rechazada por Comité Interno\n\n• Proceso terminado\n• Razón: ${notes}`);
         } else {
           alert('Error al rechazar en comité interno: ' + result.error);
         }
       }
     } catch (error) {
-      console.error('💥 Exception en comité interno:', error);
-      alert('Error en la decisión del comité interno: ' + (error as Error).message);
+      console.error('Error en comité interno:', error);
+      alert('Error en la decisión del comité interno');
     }
   };
 
@@ -438,8 +425,6 @@ export default function AutorizacionesPage() {
       
       if (!confirm(confirmMessage)) return;
       
-      console.log(`🏛️ Comité socios ${action}:`, { requestId, userId: user.id, notes });
-      
       if (approve) {
         // Aprobación final
         const { request: updatedRequest, error } = await AuthorizationService.updateAuthorizationRequest(requestId, {
@@ -449,7 +434,6 @@ export default function AutorizacionesPage() {
         
         if (!error) {
           loadAuthorizationRequests();
-          alert(`🎉 ¡SOLICITUD APROBADA FINALMENTE!\n\n• Proceso completado exitosamente\n• Lista para dispersión del crédito\n• Cliente será notificado`);
         } else {
           alert('Error en aprobación final: ' + error);
         }
@@ -459,14 +443,13 @@ export default function AutorizacionesPage() {
         
         if (result.success) {
           loadAuthorizationRequests();
-          alert(`❌ Solicitud rechazada por Comité de Socios\n\n• Proceso terminado definitivamente\n• Razón: ${notes}`);
         } else {
           alert('Error al rechazar en comité de socios: ' + result.error);
         }
       }
     } catch (error) {
-      console.error('💥 Exception en comité de socios:', error);
-      alert('Error en la decisión final: ' + (error as Error).message);
+      console.error('Error en comité de socios:', error);
+      alert('Error en la decisión final');
     }
   };
 
@@ -502,6 +485,9 @@ export default function AutorizacionesPage() {
         
         // Competidores desde múltiples fuentes
         competitors_data: request.competitors_data || (request.authorization_data?.competitors as Array<{ name: string; price: number }>) || [],
+        
+        // Simulación completa (para acceder al enganche)
+        simulation: request.simulation || undefined,
         
         // Datos del formulario
         authorization_data: request.authorization_data
@@ -549,7 +535,7 @@ export default function AutorizacionesPage() {
           term_months: (request.authorization_data?.insurance_term as number) || request.term_months || 0
         },
         payments: {
-          monthly_without_insurance: request.simulation?.pmt_total_month || request.monthly_payment || 0,
+          monthly_without_insurance: request.simulation?.pmt_total_month2 || request.monthly_payment || 0,
           monthly_total: request.monthly_payment || request.simulation?.pmt_total_month2 || 0
         },
         vehicle: {
@@ -574,6 +560,408 @@ export default function AutorizacionesPage() {
     } catch (error) {
       console.error('❌ Error al generar carta de autorización:', error);
       alert('Error al generar la carta de autorización: ' + (error as Error).message);
+    }
+  };
+
+  // Función para descargar cotización completa (con tabla de amortización)
+  const handleDownloadQuoteComplete = async (request: ExtendedAuthorizationRequest) => {
+    try {
+      if (!request.simulation) {
+        alert('No hay datos de simulación disponibles para esta solicitud');
+        return;
+      }
+
+      const simulation = request.simulation;
+      const quote = simulation.quote;
+      
+      const pdfData = {
+        summary: {},
+        schedule: [],
+        vehicleValue: quote?.vehicle_value || 0,
+        downPayment: quote?.down_payment_amount || 0,
+        insuranceAmount: quote?.insurance_amount || 0,
+        insuranceMode: quote?.insurance_mode || 'cash',
+        commissionMode: quote?.commission_mode || 'cash',
+        termMonths: simulation.term_months || 48,
+        rateTier: simulation.tier_code || 'C',
+        includeAmortizationTable: true, // CON tabla de amortización
+        // Datos del cliente
+        clientName: quote?.client_name || request.client_name || "—",
+        clientPhone: quote?.client_phone || request.client_phone || "—",
+        clientEmail: quote?.client_email || request.client_email || "—",
+        // Datos del vehículo
+        vehicleBrand: quote?.vehicle_brand || request.vehicle_brand || "—",
+        vehicleModel: quote?.vehicle_model || request.vehicle_model || "—",
+        vehicleYear: quote?.vehicle_year?.toString() || request.vehicle_year?.toString() || "—",
+        // Datos del vendedor/agencia
+        vendorName: quote?.vendor_name || "—",
+        dealerAgency: request.agency_name || "—",
+        // IDs para tracking
+        simulationId: simulation.id,
+        quoteId: quote?.id,
+        generatedByUserId: user?.id
+      };
+      
+      await generateProfessionalPDF(pdfData as any);
+      
+    } catch (error) {
+      console.error('❌ Error al generar cotización completa:', error);
+      alert('Error al generar la cotización: ' + (error as Error).message);
+    }
+  };
+
+  // Función para descargar cotización sin tabla de amortización
+  const handleDownloadQuoteSimple = async (request: ExtendedAuthorizationRequest) => {
+    try {
+      if (!request.simulation) {
+        alert('No hay datos de simulación disponibles para esta solicitud');
+        return;
+      }
+
+      const simulation = request.simulation;
+      const quote = simulation.quote;
+      
+      const pdfData = {
+        summary: {},
+        schedule: [],
+        vehicleValue: quote?.vehicle_value || 0,
+        downPayment: quote?.down_payment_amount || 0,
+        insuranceAmount: quote?.insurance_amount || 0,
+        insuranceMode: quote?.insurance_mode || 'cash',
+        commissionMode: quote?.commission_mode || 'cash',
+        termMonths: simulation.term_months || 48,
+        rateTier: simulation.tier_code || 'C',
+        includeAmortizationTable: false, // SIN tabla de amortización
+        // Datos del cliente
+        clientName: quote?.client_name || request.client_name || "—",
+        clientPhone: quote?.client_phone || request.client_phone || "—",
+        clientEmail: quote?.client_email || request.client_email || "—",
+        // Datos del vehículo
+        vehicleBrand: quote?.vehicle_brand || request.vehicle_brand || "—",
+        vehicleModel: quote?.vehicle_model || request.vehicle_model || "—",
+        vehicleYear: quote?.vehicle_year?.toString() || request.vehicle_year?.toString() || "—",
+        // Datos del vendedor/agencia
+        vendorName: quote?.vendor_name || "—",
+        dealerAgency: request.agency_name || "—",
+        // IDs para tracking
+        simulationId: simulation.id,
+        quoteId: quote?.id,
+        generatedByUserId: user?.id
+      };
+      
+      await generateProfessionalPDF(pdfData as any);
+      
+    } catch (error) {
+      console.error('❌ Error al generar cotización simple:', error);
+      alert('Error al generar la cotización: ' + (error as Error).message);
+    }
+  };
+
+  // Función para marcar crédito como dispersado
+  const handleMarkAsDispersed = async (requestId: string) => {
+    if (!user) {
+      alert('Debes estar autenticado para marcar como dispersado');
+      return;
+    }
+
+    const confirmMessage = `¿Confirmar que el crédito ha sido dispersado?\n\n💰 Esta es la etapa final del proceso`;
+    
+    if (!confirm(confirmMessage)) return;
+
+    try {
+      const { request: updatedRequest, error } = await AuthorizationService.updateAuthorizationRequest(requestId, {
+        status: 'dispersed',
+        dispersed_at: new Date().toISOString(),
+        dispersed_by: user.id
+      });
+
+      if (updatedRequest) {
+        loadAuthorizationRequests();
+      } else {
+        alert('Error al marcar como dispersado: ' + error);
+      }
+    } catch (error) {
+      console.error('Error al marcar como dispersado:', error);
+      alert('Error al procesar la solicitud: ' + (error as Error).message);
+    }
+  };
+
+  // Componente para botón dinámico de solicitud de crédito
+  const CreditApplicationButton = ({ request, variant = 'small' }: { request: ExtendedAuthorizationRequest, variant?: 'small' | 'large' }) => {
+    const [hasExisting, setHasExisting] = useState<boolean>(false);
+    const [existingApp, setExistingApp] = useState<any>(null);
+    const [isChecking, setIsChecking] = useState(true);
+
+    useEffect(() => {
+      const checkExisting = async () => {
+        if (!user?.id) {
+          setIsChecking(false);
+          setHasExisting(false);
+          return;
+        }
+
+        console.log(`🔍 [BUTTON] Buscando solicitud para autorización:`, {
+          authId: request.id,
+          simulationId: request.simulation_id,
+          quoteId: request.quote_id,
+          clientEmail: request.client_email
+        });
+        
+        try {
+          const response = await fetch(`/api/credit-applications?created_by=${user.id}`);
+          if (response.ok) {
+            const { credit_applications } = await response.json();
+            
+            // Buscar por simulation_id y quote_id (enlace correcto)
+            const existing = credit_applications?.find((app: any) => 
+              app.status === 'draft' &&
+              (
+                // Coincidencia por simulation_id Y quote_id
+                (request.simulation_id && app.simulation_id === request.simulation_id) ||
+                (request.quote_id && app.quote_id === request.quote_id) ||
+                // Fallback: coincidencia por datos del cliente
+                (app.personal_email === request.client_email && 
+                 app.first_names?.toLowerCase().includes(request.client_name?.toLowerCase() || ''))
+              )
+            );
+            
+            console.log(`📋 [BUTTON] Resultado para autorización ${request.id}:`, existing ? `ENCONTRADA (${existing.folio_number})` : 'NO ENCONTRADA');
+            setHasExisting(!!existing);
+            setExistingApp(existing);
+          }
+        } catch (error) {
+          console.warn('Error verificando solicitudes existentes:', error);
+          setHasExisting(false);
+        } finally {
+          setIsChecking(false);
+        }
+      };
+
+      checkExisting();
+    }, [user?.id, request.id, request.simulation_id, request.quote_id, request.client_email, request.client_name]);
+
+    const handleClick = () => {
+      if (hasExisting && existingApp) {
+        console.log(`🔄 [BUTTON] Continuando solicitud existente: ${existingApp.folio_number}`);
+        // Ir directamente a la solicitud existente
+        const url = `/solicitud-credito?application_id=${existingApp.id}`;
+        window.open(url, '_blank');
+      } else {
+        console.log(`📝 [BUTTON] Creando nueva solicitud para autorización: ${request.id}`);
+        handleFillCreditApplication(request);
+      }
+    };
+
+    const buttonText = hasExisting ? "Continuar Solicitud" : "Llenar Solicitud de Crédito";
+
+    const baseClasses = "inline-flex items-center bg-indigo-600 text-white font-medium rounded hover:bg-indigo-700 transition-colors disabled:opacity-50";
+    const sizeClasses = variant === 'large' 
+      ? "px-4 py-2 text-sm" 
+      : "px-2 py-1 text-xs";
+    const iconClasses = variant === 'large' 
+      ? "w-4 h-4 mr-2" 
+      : "w-3 h-3 mr-1";
+
+    if (isChecking) {
+      return (
+        <button disabled className={`${baseClasses} ${sizeClasses} opacity-50`}>
+          <FileText className={iconClasses} />
+          {variant === 'large' ? "Verificando..." : "..."}
+        </button>
+      );
+    }
+
+    return (
+      <button
+        onClick={handleClick}
+        className={`${baseClasses} ${sizeClasses} ${hasExisting ? 'bg-green-600 hover:bg-green-700' : ''}`}
+        title={hasExisting ? `Continuar solicitud ${existingApp?.folio_number}` : "Llenar nueva solicitud de crédito"}
+      >
+        <FileText className={iconClasses} />
+        {variant === 'large' ? buttonText : (hasExisting ? "Continuar" : "Solicitud")}
+      </button>
+    );
+  };
+
+  // =========================================
+  // NUEVAS FUNCIONES PARA SOLICITUD DE CRÉDITO
+  // =========================================
+
+  const handleFillCreditApplication = async (request: ExtendedAuthorizationRequest) => {
+    console.log('📝 Abriendo formulario de solicitud de crédito para:', request.id);
+    
+    console.log('🔍 [FULL DEBUG] Datos disponibles en request:', {
+      request_basic: {
+        vehicle_brand: request.vehicle_brand,
+        vehicle_model: request.vehicle_model,
+        vehicle_year: request.vehicle_year,
+        vehicle_value: request.vehicle_value,
+        requested_amount: request.requested_amount,
+        monthly_payment: request.monthly_payment,
+        term_months: request.term_months,
+        agency_name: request.agency_name
+      },
+      simulation_exists: !!request.simulation,
+      simulation_data: request.simulation ? {
+        id: request.simulation.id,
+        tier_code: request.simulation.tier_code,
+        term_months: request.simulation.term_months,
+        monthly_payment: request.simulation.monthly_payment
+      } : null,
+      quote_exists: !!request.simulation?.quote,
+      quote_data: request.simulation?.quote ? {
+        id: request.simulation.quote.id,
+        client_name: request.simulation.quote.client_name,
+        vehicle_brand: request.simulation.quote.vehicle_brand,
+        vehicle_model: request.simulation.quote.vehicle_model,
+        vehicle_year: request.simulation.quote.vehicle_year,
+        vehicle_value: request.simulation.quote.vehicle_value,
+        down_payment_amount: request.simulation.quote.down_payment_amount,
+        insurance_amount: request.simulation.quote.insurance_amount,
+        insurance_mode: request.simulation.quote.insurance_mode,
+        agency_name: request.simulation.quote.vendor_name,
+        FULL_QUOTE_OBJECT: request.simulation.quote // Ver objeto completo
+      } : null
+    });
+    
+    // Construir URL con parámetros de la autorización
+    const params = new URLSearchParams();
+    
+    if (request.quote_id) {
+      params.append('quote_id', request.quote_id);
+    }
+    if (request.simulation_id) {
+      params.append('simulation_id', request.simulation_id);
+    }
+    
+    // Agregar parámetros del cliente para pre-llenar el formulario
+    if (request.client_name) {
+      params.append('client_name', request.client_name);
+    }
+    if (request.client_email) {
+      params.append('client_email', request.client_email);
+    }
+    if (request.client_phone) {
+      params.append('client_phone', request.client_phone);
+    }
+    
+    // Datos del vehículo - PRIORIDAD: simulation.quote > request directo
+    const vehicleBrand = request.simulation?.quote?.vehicle_brand || request.vehicle_brand;
+    const vehicleModel = request.simulation?.quote?.vehicle_model || request.vehicle_model;
+    const vehicleYear = request.simulation?.quote?.vehicle_year || request.vehicle_year;
+    const vehicleValue = request.simulation?.quote?.vehicle_value || request.vehicle_value;
+    
+    if (vehicleBrand) {
+      params.append('vehicle_brand', vehicleBrand);
+    }
+    if (vehicleModel) {
+      params.append('vehicle_model', vehicleModel);
+    }
+    if (vehicleYear) {
+      params.append('vehicle_year', vehicleYear.toString());
+    }
+    if (vehicleValue) {
+      params.append('vehicle_value', vehicleValue.toString());
+    }
+    
+    // Datos financieros - PRIORIDAD: simulation > request directo
+    const requestedAmount = request.requested_amount || 
+                           (vehicleValue && request.simulation?.quote?.down_payment_amount 
+                             ? vehicleValue - request.simulation.quote.down_payment_amount 
+                             : undefined);
+    const monthlyPayment = request.simulation?.monthly_payment || request.monthly_payment;
+    const termMonths = request.simulation?.term_months || request.term_months;
+    
+    if (requestedAmount) {
+      params.append('requested_amount', requestedAmount.toString());
+    }
+    if (monthlyPayment) {
+      params.append('monthly_payment', monthlyPayment.toString());
+    }
+    if (termMonths) {
+      params.append('term_months', termMonths.toString());
+    }
+    
+    // NUEVOS DATOS IMPORTANTES - Enganche y Seguro
+    if (request.simulation?.quote?.down_payment_amount) {
+      params.append('down_payment_amount', request.simulation.quote.down_payment_amount.toString());
+    }
+    
+    if (request.simulation?.quote?.insurance_amount) {
+      params.append('insurance_amount', request.simulation.quote.insurance_amount.toString());
+    }
+    
+    if (request.simulation?.quote?.insurance_mode) {
+      params.append('insurance_mode', request.simulation.quote.insurance_mode);
+    }
+    
+    // Datos de la agencia
+    const agencyName = request.agency_name || request.simulation?.quote?.vendor_name;
+    if (agencyName) {
+      params.append('agency_name', agencyName);
+    }
+    
+    // IMPORTANTE: Agregar simulation_id y quote_id para enlazar correctamente
+    if (request.simulation_id) {
+      params.append('simulation_id', request.simulation_id);
+    }
+    if (request.quote_id) {
+      params.append('quote_id', request.quote_id);
+    }
+    
+    const url = `/solicitud-credito?${params.toString()}`;
+    
+    console.log('🔗 URL generada para solicitud de crédito:', url);
+    console.log('📊 Parámetros incluidos:', {
+      cliente: { clientName: request.client_name, clientEmail: request.client_email, clientPhone: request.client_phone },
+      vehiculo: { vehicleBrand, vehicleModel, vehicleYear, vehicleValue },
+      financiero: { requestedAmount, monthlyPayment, termMonths },
+      enganche: request.simulation?.quote?.down_payment_amount,
+      seguro: { 
+        amount: request.simulation?.quote?.insurance_amount, 
+        mode: request.simulation?.quote?.insurance_mode 
+      },
+      agencia: agencyName
+    });
+    
+    // Abrir en nueva pestaña para no perder el contexto del portal de autorizaciones
+    window.open(url, '_blank');
+  };
+
+  const handleDownloadCreditApplication = async (request: ExtendedAuthorizationRequest) => {
+    try {
+      console.log('📄 Buscando solicitud de crédito para autorización:', request.id);
+      
+      // Buscar si existe una solicitud de crédito asociada
+      const response = await fetch(`/api/credit-applications?quote_id=${request.quote_id || ''}&simulation_id=${request.simulation_id || ''}`);
+      
+      if (!response.ok) {
+        throw new Error('Error al buscar solicitud de crédito');
+      }
+      
+      const { applications } = await response.json();
+      
+      if (!applications || applications.length === 0) {
+        alert('No se encontró una solicitud de crédito asociada. Primero debe llenar la solicitud de crédito.');
+        return;
+      }
+      
+      // Tomar la primera solicitud encontrada (más reciente)
+      const application = applications[0];
+      
+      console.log('📄 Generando PDF de solicitud de crédito:', application.folio_number);
+      
+      // Importar dinámicamente el generador de PDF
+      const { generateCreditApplicationPDF } = await import('../../lib/credit-application-pdf-generator');
+      
+      // Generar y descargar el PDF
+      await generateCreditApplicationPDF(application);
+      
+      console.log('✅ PDF de solicitud de crédito generado exitosamente');
+      
+    } catch (error) {
+      console.error('❌ Error al generar PDF de solicitud de crédito:', error);
+      alert('Error al generar el PDF de solicitud de crédito: ' + (error as Error).message);
     }
   };
 
@@ -628,8 +1016,16 @@ export default function AutorizacionesPage() {
         icon: <CheckCircle className="w-4 h-4" />,
         text: 'Aprobado Final',
         description: 'Solicitud aprobada - Lista para dispersión',
-        nextAction: 'Proceso completado',
+        nextAction: 'Dispersar crédito',
         priority: 6
+      },
+      'dispersed': {
+        color: 'bg-emerald-100 text-emerald-900 border-emerald-300',
+        icon: <TrendingUp className="w-4 h-4" />,
+        text: 'Dispersado',
+        description: 'Crédito dispersado exitosamente',
+        nextAction: 'Proceso completado',
+        priority: 7
       },
       'rejected': {
         color: 'bg-red-100 text-red-800 border-red-200',
@@ -637,7 +1033,7 @@ export default function AutorizacionesPage() {
         text: 'Rechazado',
         description: 'Solicitud rechazada en alguna etapa',
         nextAction: 'Proceso terminado',
-        priority: 7
+        priority: 8
       },
       'cancelled': {
         color: 'bg-gray-100 text-gray-800 border-gray-200',
@@ -679,6 +1075,7 @@ export default function AutorizacionesPage() {
       internal_committee: requests.filter(r => r.status === 'internal_committee').length,
       partners_committee: requests.filter(r => r.status === 'partners_committee').length,
       approved: requests.filter(r => r.status === 'approved').length,
+      dispersed: requests.filter(r => r.status === 'dispersed').length,
       rejected: requests.filter(r => r.status === 'rejected').length,
       cancelled: requests.filter(r => r.status === 'cancelled').length,
       total: requests.length
@@ -756,35 +1153,53 @@ export default function AutorizacionesPage() {
           </div>
         </div>
 
-        {/* Stats Cards Mejoradas */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-3 mb-8">
-          <div className="bg-white p-4 rounded-2xl shadow-lg border border-gray-100 hover:shadow-xl transition-shadow">
+        {/* Stats Cards Mejoradas - AHORA CLICKEABLES */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-7 gap-3 mb-8">
+          {/* Pendientes */}
+          <button 
+            onClick={() => setStatusFilter('pending')}
+            className={`bg-white p-4 rounded-2xl shadow-lg border-2 hover:shadow-xl transition-all text-left ${
+              statusFilter === 'pending' ? 'border-yellow-500 ring-2 ring-yellow-200' : 'border-gray-100'
+            }`}
+          >
             <div className="flex items-center">
               <div className="p-2 bg-yellow-100 rounded-lg">
                 <Clock className="w-5 h-5 text-yellow-600" />
-                </div>
+              </div>
               <div className="ml-3">
                 <p className="text-xs font-medium text-gray-600 uppercase tracking-wider">Pendientes</p>
                 <p className="text-xl font-bold text-gray-900">{stats.pending}</p>
                 <p className="text-xs text-yellow-600">Esperando asesor</p>
               </div>
             </div>
-                </div>
+          </button>
 
-          <div className="bg-white p-4 rounded-2xl shadow-lg border border-gray-100 hover:shadow-xl transition-shadow">
+          {/* En Revisión */}
+          <button 
+            onClick={() => setStatusFilter('in_review')}
+            className={`bg-white p-4 rounded-2xl shadow-lg border-2 hover:shadow-xl transition-all text-left ${
+              statusFilter === 'in_review' ? 'border-blue-500 ring-2 ring-blue-200' : 'border-gray-100'
+            }`}
+          >
             <div className="flex items-center">
               <div className="p-2 bg-blue-100 rounded-lg">
                 <Users className="w-5 h-5 text-blue-600" />
-                </div>
+              </div>
               <div className="ml-3">
                 <p className="text-xs font-medium text-gray-600 uppercase tracking-wider">En Revisión</p>
                 <p className="text-xl font-bold text-gray-900">{stats.in_review}</p>
                 <p className="text-xs text-blue-600">Con asesor</p>
               </div>
             </div>
-                </div>
+          </button>
 
-          <div className="bg-white p-4 rounded-2xl shadow-lg border border-gray-100 hover:shadow-xl transition-shadow">
+          {/* Comité Interno */}
+          <button 
+            onClick={() => setStatusFilter('internal_committee')}
+            className={`bg-white p-4 rounded-2xl shadow-lg border-2 hover:shadow-xl transition-all text-left ${
+              statusFilter === 'internal_committee' ? 'border-purple-500 ring-2 ring-purple-200' : 'border-gray-100'
+            }`}
+          >
             <div className="flex items-center">
               <div className="p-2 bg-purple-100 rounded-lg">
                 <Building2 className="w-5 h-5 text-purple-600" />
@@ -795,9 +1210,15 @@ export default function AutorizacionesPage() {
                 <p className="text-xs text-purple-600">En evaluación</p>
               </div>
             </div>
-          </div>
+          </button>
 
-          <div className="bg-white p-4 rounded-2xl shadow-lg border border-gray-100 hover:shadow-xl transition-shadow">
+          {/* Aprobadas */}
+          <button 
+            onClick={() => setStatusFilter('approved')}
+            className={`bg-white p-4 rounded-2xl shadow-lg border-2 hover:shadow-xl transition-all text-left ${
+              statusFilter === 'approved' ? 'border-green-500 ring-2 ring-green-200' : 'border-gray-100'
+            }`}
+          >
             <div className="flex items-center">
               <div className="p-2 bg-green-100 rounded-lg">
                 <CheckCircle className="w-5 h-5 text-green-600" />
@@ -808,33 +1229,64 @@ export default function AutorizacionesPage() {
                 <p className="text-xs text-green-600">Listas dispersión</p>
               </div>
             </div>
-          </div>
+          </button>
 
-          <div className="bg-white p-4 rounded-2xl shadow-lg border border-gray-100 hover:shadow-xl transition-shadow">
+          {/* Dispersadas */}
+          <button 
+            onClick={() => setStatusFilter('dispersed')}
+            className={`bg-white p-4 rounded-2xl shadow-lg border-2 hover:shadow-xl transition-all text-left ${
+              statusFilter === 'dispersed' ? 'border-emerald-500 ring-2 ring-emerald-200' : 'border-gray-100'
+            }`}
+          >
+            <div className="flex items-center">
+              <div className="p-2 bg-emerald-100 rounded-lg">
+                <TrendingUp className="w-5 h-5 text-emerald-600" />
+              </div>
+              <div className="ml-3">
+                <p className="text-xs font-medium text-gray-600 uppercase tracking-wider">Dispersadas</p>
+                <p className="text-xl font-bold text-gray-900">{stats.dispersed}</p>
+                <p className="text-xs text-emerald-600">Completadas</p>
+              </div>
+            </div>
+          </button>
+
+          {/* Rechazadas */}
+          <button 
+            onClick={() => setStatusFilter('rejected')}
+            className={`bg-white p-4 rounded-2xl shadow-lg border-2 hover:shadow-xl transition-all text-left ${
+              statusFilter === 'rejected' ? 'border-red-500 ring-2 ring-red-200' : 'border-gray-100'
+            }`}
+          >
             <div className="flex items-center">
               <div className="p-2 bg-red-100 rounded-lg">
                 <XCircle className="w-5 h-5 text-red-600" />
-                </div>
+              </div>
               <div className="ml-3">
                 <p className="text-xs font-medium text-gray-600 uppercase tracking-wider">Rechazadas</p>
                 <p className="text-xl font-bold text-gray-900">{stats.rejected}</p>
                 <p className="text-xs text-red-600">Proceso terminado</p>
               </div>
             </div>
-                </div>
+          </button>
 
-          <div className="bg-white p-4 rounded-2xl shadow-lg border border-gray-100 hover:shadow-xl transition-shadow">
+          {/* Total (Ver Todas) */}
+          <button 
+            onClick={() => setStatusFilter('all')}
+            className={`bg-white p-4 rounded-2xl shadow-lg border-2 hover:shadow-xl transition-all text-left ${
+              statusFilter === 'all' ? 'border-gray-500 ring-2 ring-gray-200' : 'border-gray-100'
+            }`}
+          >
             <div className="flex items-center">
               <div className="p-2 bg-gray-100 rounded-lg">
                 <FileCheck className="w-5 h-5 text-gray-600" />
-                </div>
+              </div>
               <div className="ml-3">
                 <p className="text-xs font-medium text-gray-600 uppercase tracking-wider">Total</p>
                 <p className="text-xl font-bold text-gray-900">{stats.total}</p>
-                <p className="text-xs text-gray-600">Todas las solicitudes</p>
+                <p className="text-xs text-gray-600">Todas</p>
               </div>
             </div>
-          </div>
+          </button>
         </div>
 
         {/* Panel de Métricas Avanzadas */}
@@ -958,13 +1410,14 @@ export default function AutorizacionesPage() {
 
                         <div className="flex gap-4 items-center">
               <div className="flex gap-2 flex-wrap">
-                {[
+                {                [
                   { value: 'all', label: 'Todas' },
                   { value: 'pending', label: 'Pendientes' },
                   { value: 'in_review', label: 'En Revisión' },
                   { value: 'internal_committee', label: 'Comité Interno' },
                   { value: 'partners_committee', label: 'Comité de Socios' },
                   { value: 'approved', label: 'Aprobadas' },
+                  { value: 'dispersed', label: 'Dispersadas' },
                   { value: 'rejected', label: 'Rechazadas' }
                 ].map((filter) => (
                   <button
@@ -1088,6 +1541,19 @@ export default function AutorizacionesPage() {
                         Revisar
                       </button>
 
+                        {/* Botón dinámico Llenar/Continuar Solicitud de Crédito */}
+                        <CreditApplicationButton request={request} />
+
+                        {/* Botón Descargar Solicitud */}
+                        <button
+                          onClick={() => handleDownloadCreditApplication(request)}
+                          className="inline-flex items-center px-2 py-1 bg-gray-600 text-white text-xs font-medium rounded hover:bg-gray-700 transition-colors"
+                          title="Descargar PDF de solicitud de crédito"
+                        >
+                          <Download className="w-3 h-3 mr-1" />
+                          PDF
+                        </button>
+
                         {/* Botón Reclamar (solo para pendientes) */}
                         {request.status === 'pending' && (
                           <button
@@ -1147,7 +1613,7 @@ export default function AutorizacionesPage() {
               filteredRequests.map((request) => (
                 <div key={request.id} className="bg-white rounded-2xl shadow-lg border border-gray-100 p-6 hover:shadow-xl transition-shadow">
                   {/* Card Header */}
-                  <div className="flex justify-between items-start mb-4">
+                  <div className="flex justify-between items-center mb-4">
                     <div className="flex items-center space-x-3">
                       <div className="w-12 h-12 bg-gradient-to-br from-emerald-500 to-cyan-600 rounded-full flex items-center justify-center">
                         <User className="w-6 h-6 text-white" />
@@ -1163,11 +1629,34 @@ export default function AutorizacionesPage() {
                       </div>
                     </div>
                     
-                    <div className="text-right">
+                    {/* Botones de cotización en el centro - Si hay simulación */}
+                    {request.simulation && (
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => handleDownloadQuoteComplete(request)}
+                          className="inline-flex items-center px-3 py-1.5 bg-emerald-600 text-white text-xs font-medium rounded-lg hover:bg-emerald-700 transition-colors"
+                          title="Descargar cotización con tabla de amortización completa"
+                        >
+                          <FileText className="w-3 h-3 mr-1.5" />
+                          Cotización completa
+                        </button>
+                        <button
+                          onClick={() => handleDownloadQuoteSimple(request)}
+                          className="inline-flex items-center px-3 py-1.5 bg-teal-600 text-white text-xs font-medium rounded-lg hover:bg-teal-700 transition-colors"
+                          title="Descargar cotización sin tabla de amortización"
+                        >
+                          <FileText className="w-3 h-3 mr-1.5" />
+                          Cotización sin tabla
+                        </button>
+                      </div>
+                    )}
+                    
+                    <div className="flex flex-col items-end gap-2">
+                      {/* Badge de estado */}
                       <span className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border ${getStatusColor(request.status)}`}>
-                      {getStatusIcon(request.status)}
-                      <span className="ml-2">{getStatusText(request.status)}</span>
-                    </span>
+                        {getStatusIcon(request.status)}
+                        <span className="ml-2">{getStatusText(request.status)}</span>
+                      </span>
                       <div className="text-xs text-gray-500 mt-1">
                         {getStatusConfig(request.status).description}
                       </div>
@@ -1190,7 +1679,8 @@ export default function AutorizacionesPage() {
                         { key: 'advisor_approved', label: 'Asesor ✓' },
                         { key: 'internal_committee', label: 'Comité Int.' },
                         { key: 'partners_committee', label: 'Comité Socios' },
-                        { key: 'approved', label: 'Aprobado' }
+                        { key: 'approved', label: 'Aprobado' },
+                        { key: 'dispersed', label: 'Dispersado' }
                       ].map((stage, index, array) => {
                         const currentStatusConfig = getStatusConfig(request.status);
                         const stageConfig = getStatusConfig(stage.key);
@@ -1242,96 +1732,142 @@ export default function AutorizacionesPage() {
                     </div>
                   </div>
 
-                  {/* Card Content */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                    {/* Vehicle Info */}
-                    <div className="bg-gray-50 rounded-lg p-3">
-                      <div className="flex items-center mb-2">
-                        <Calendar className="w-4 h-4 text-gray-500 mr-2" />
-                        <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">Vehículo</span>
+                  {/* Card Content - Información en Una Línea */}
+                  <div className="overflow-x-auto mb-4">
+                    <div className="flex gap-2 min-w-max">
+                      {/* Vehículo */}
+                      <div className="bg-blue-50 rounded-lg p-2 border border-blue-100 w-32">
+                        <div className="flex items-center mb-1">
+                          <Calendar className="w-3 h-3 text-blue-600 mr-1" />
+                          <span className="text-[10px] font-medium text-blue-700 uppercase">Vehículo</span>
+                        </div>
+                        <p className="text-xs font-bold text-gray-900 truncate">
+                          {request.simulation?.quote?.vehicle_brand || request.vehicle_brand || 'N/A'}
+                        </p>
+                        <p className="text-[10px] text-gray-600 truncate">
+                          {request.simulation?.quote?.vehicle_model || request.vehicle_model || ''} {request.simulation?.quote?.vehicle_year || request.vehicle_year || ''}
+                        </p>
                       </div>
-                      <p className="text-sm font-medium text-gray-900">
-                        {request.simulation?.quote?.vehicle_brand || request.vehicle_brand || 'N/A'} {request.simulation?.quote?.vehicle_model || request.vehicle_model || ''}
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        {request.simulation?.quote?.vehicle_year || request.vehicle_year || 'N/A'}
-                      </p>
-                    </div>
 
-                    {/* Amount */}
-                    <div className="bg-gray-50 rounded-lg p-3">
-                      <div className="flex items-center mb-2">
-                        <FileCheck className="w-4 h-4 text-gray-500 mr-2" />
-                        <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">Monto</span>
+                      {/* Valor Vehículo */}
+                      <div className="bg-emerald-50 rounded-lg p-2 border border-emerald-100 w-28">
+                        <div className="flex items-center mb-1">
+                          <DollarSign className="w-3 h-3 text-emerald-600 mr-1" />
+                          <span className="text-[10px] font-medium text-emerald-700 uppercase">Valor</span>
+                        </div>
+                        <p className="text-xs font-bold text-gray-900 truncate">
+                          {formatMXN(request.simulation?.quote?.vehicle_value || request.vehicle_value || 0)}
+                        </p>
                       </div>
-                      <p className="text-sm font-medium text-gray-900">
-                        {formatMXN(request.simulation?.quote?.vehicle_value || request.vehicle_value || 0)}
-                      </p>
-                    </div>
 
-                    {/* Date */}
-                    <div className="bg-gray-50 rounded-lg p-3">
-                      <div className="flex items-center mb-2">
-                        <Clock className="w-4 h-4 text-gray-500 mr-2" />
-                        <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">Fecha</span>
+                      {/* Enganche */}
+                      <div className="bg-amber-50 rounded-lg p-2 border border-amber-100 w-28">
+                        <div className="flex items-center mb-1">
+                          <TrendingUp className="w-3 h-3 text-amber-600 mr-1" />
+                          <span className="text-[10px] font-medium text-amber-700 uppercase">Enganche</span>
+                        </div>
+                        <p className="text-xs font-bold text-gray-900 truncate">
+                          {formatMXN(request.simulation?.quote?.down_payment_amount || 0)}
+                        </p>
+                        <p className="text-[10px] text-gray-600">
+                          {request.simulation?.quote?.vehicle_value 
+                            ? `${((request.simulation.quote.down_payment_amount || 0) / request.simulation.quote.vehicle_value * 100).toFixed(1)}%`
+                            : '0%'}
+                        </p>
                       </div>
-                      <p className="text-sm font-medium text-gray-900">
-                        {new Date(request.createdAt || request.created_at).toLocaleDateString()}
-                      </p>
-                      <p className="text-xs text-gray-500">
-                        {new Date(request.createdAt || request.created_at).toLocaleTimeString()}
-                      </p>
-                    </div>
 
-                    {/* Advisor Info */}
-                    <div className="bg-gray-50 rounded-lg p-3">
-                      <div className="flex items-center mb-2">
-                        <UserCheck className="w-4 h-4 text-gray-500 mr-2" />
-                        <span className="text-xs font-medium text-gray-500 uppercase tracking-wider">Estado del Asesor</span>
+                      {/* Monto Crédito */}
+                      <div className="bg-purple-50 rounded-lg p-2 border border-purple-100 w-28">
+                        <div className="flex items-center mb-1">
+                          <FileCheck className="w-3 h-3 text-purple-600 mr-1" />
+                          <span className="text-[10px] font-medium text-purple-700 uppercase">Crédito</span>
+                        </div>
+                        <p className="text-xs font-bold text-gray-900 truncate">
+                          {formatMXN(request.simulation?.financed_amount || request.requested_amount || 0)}
+                        </p>
                       </div>
-                      {request.status === 'pending' ? (
-                        <div>
-                          <p className="text-sm font-medium text-gray-500">Sin asignar</p>
-                          <p className="text-xs text-gray-400">Cualquier asesor puede reclamar</p>
+
+                      {/* Plazo */}
+                      <div className="bg-cyan-50 rounded-lg p-2 border border-cyan-100 w-24">
+                        <div className="flex items-center mb-1">
+                          <Clock className="w-3 h-3 text-cyan-600 mr-1" />
+                          <span className="text-[10px] font-medium text-cyan-700 uppercase">Plazo</span>
                         </div>
-                      ) : request.status === 'in_review' ? (
-                        <div>
-                          <p className="text-sm font-medium text-gray-900">
-                            {request.reviewerName || 'Asesor asignado'}
-                          </p>
-                          <p className="text-xs text-emerald-600 font-medium">
-                            {request.reviewerId === user?.id ? 'Reclamado por ti' : `Reclamado por este asesor`}
-                          </p>
+                        <p className="text-xs font-bold text-gray-900">
+                          {request.simulation?.term_months || request.term_months || 0} m
+                        </p>
+                      </div>
+
+                      {/* Pago Mensual */}
+                      <div className="bg-rose-50 rounded-lg p-2 border border-rose-100 w-28">
+                        <div className="flex items-center mb-1">
+                          <DollarSign className="w-3 h-3 text-rose-600 mr-1" />
+                          <span className="text-[10px] font-medium text-rose-700 uppercase">Pago</span>
                         </div>
-                      ) : request.status === 'advisor_approved' ? (
-                        <div>
-                          <p className="text-sm font-medium text-gray-900">
-                            {request.reviewerName || 'Asesor'}
-                          </p>
-                          <p className="text-xs text-green-600 font-medium">Aprobado por asesor</p>
+                        <p className="text-xs font-bold text-gray-900 truncate">
+                          {formatMXN(request.simulation?.pmt_total_month2 || request.monthly_payment || 0)}
+                        </p>
+                      </div>
+
+                      {/* Tasa de Interés */}
+                      <div className="bg-orange-50 rounded-lg p-2 border border-orange-100 w-20">
+                        <div className="flex items-center mb-1">
+                          <TrendingUp className="w-3 h-3 text-orange-600 mr-1" />
+                          <span className="text-[10px] font-medium text-orange-700 uppercase">Tasa</span>
                         </div>
-                      ) : request.status === 'internal_committee' ? (
-                        <div>
-                          <p className="text-sm font-medium text-gray-900">Comité Interno</p>
-                          <p className="text-xs text-purple-600 font-medium">En revisión interna</p>
+                        <p className="text-xs font-bold text-gray-900">
+                          {request.simulation?.tier_code === 'A' ? '36%' :
+                           request.simulation?.tier_code === 'B' ? '40%' :
+                           request.simulation?.tier_code === 'C' ? '45%' : 'N/A'}
+                        </p>
+                      </div>
+
+                      {/* Fecha */}
+                      <div className="bg-gray-50 rounded-lg p-2 border border-gray-200 w-24">
+                        <div className="flex items-center mb-1">
+                          <Clock className="w-3 h-3 text-gray-600 mr-1" />
+                          <span className="text-[10px] font-medium text-gray-700 uppercase">Fecha</span>
                         </div>
-                      ) : request.status === 'partners_committee' ? (
-                        <div>
-                          <p className="text-sm font-medium text-gray-900">Comité Socios</p>
-                          <p className="text-xs text-orange-600 font-medium">En comité de socios</p>
+                        <p className="text-xs font-bold text-gray-900">
+                          {new Date(request.createdAt || request.created_at).toLocaleDateString('es-MX', { 
+                            day: '2-digit', 
+                            month: '2-digit', 
+                            year: '2-digit' 
+                          })}
+                        </p>
+                        <p className="text-[10px] text-gray-600">
+                          {new Date(request.createdAt || request.created_at).toLocaleTimeString('es-MX', {
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}
+                        </p>
+                      </div>
+
+                      {/* Estado del Asesor - Flexible para llenar el espacio */}
+                      <div className="bg-teal-50 rounded-lg p-2 border border-teal-100 flex-1 min-w-[7rem]">
+                        <div className="flex items-center mb-1">
+                          <UserCheck className="w-3 h-3 text-teal-600 mr-1" />
+                          <span className="text-[10px] font-medium text-teal-700 uppercase">Asesor</span>
                         </div>
-                      ) : (
-                        <div>
-                          <p className="text-sm font-medium text-gray-900">
-                            {request.reviewerName || 'Procesado'}
-                          </p>
-                          <p className="text-xs text-gray-500">
-                            {request.status === 'approved' ? 'Aprobado final' : 
-                             request.status === 'rejected' ? 'Rechazado' : 
-                             request.status === 'cancelled' ? 'Cancelado' : 'Procesado'}
-                          </p>
-                        </div>
-                      )}
+                        {request.status === 'pending' ? (
+                          <p className="text-xs font-bold text-gray-500 truncate">Sin asignar</p>
+                        ) : request.status === 'dispersed' ? (
+                          <>
+                            <p className="text-xs font-bold text-emerald-900 truncate">{request.reviewerName || 'OK'}</p>
+                            <p className="text-[10px] text-emerald-600">💰 Dispersado</p>
+                          </>
+                        ) : (
+                          <>
+                            <p className="text-xs font-bold text-gray-900 truncate">{request.reviewerName || 'Procesado'}</p>
+                            <p className="text-[10px] text-gray-600">
+                              {request.status === 'in_review' ? 'Revisión' :
+                               request.status === 'advisor_approved' ? '✓ Aprobado' :
+                               request.status === 'approved' ? '✓ Final' : 
+                               request.status === 'rejected' ? '✗ No' : '—'}
+                            </p>
+                          </>
+                        )}
+                      </div>
                     </div>
                   </div>
 
@@ -1528,19 +2064,95 @@ export default function AutorizacionesPage() {
                         className="inline-flex items-center px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors"
                       >
                         <FileCheck className="w-4 h-4 mr-2" />
-                        Descargar PDF
+                        Descargar autorización para socios
                       </button>
                     )}
 
+                    {/* Botón dinámico Llenar/Continuar Solicitud de Crédito */}
+                    <CreditApplicationButton request={request} variant="large" />
+
+                    {/* Descargar Solicitud de Crédito - Disponible para todos los estados */}
+                    <button
+                      onClick={() => handleDownloadCreditApplication(request)}
+                      className="inline-flex items-center px-4 py-2 bg-gray-600 text-white text-sm font-medium rounded-lg hover:bg-gray-700 transition-colors"
+                      title="Descargar PDF de solicitud de crédito"
+                    >
+                      <Download className="w-4 h-4 mr-2" />
+                      Descargar Solicitud PDF
+                    </button>
+
                     {/* Carta de Autorización de Crédito - Solo cuando está aprobado */}
                     {request.status === 'approved' && (
-                      <button
-                        onClick={() => handleDownloadClientLetter(request)}
-                        className="inline-flex items-center px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors"
-                      >
-                        <FileCheck className="w-4 h-4 mr-2" />
-                        Carta de Autorización de Crédito
-                      </button>
+                      <>
+                        <button
+                          onClick={() => handleDownloadClientLetter(request)}
+                          className="inline-flex items-center px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors"
+                        >
+                          <FileCheck className="w-4 h-4 mr-2" />
+                          Carta de Autorización de Crédito
+                        </button>
+
+                        <button
+                          onClick={() => handleMarkAsDispersed(request.id)}
+                          className="inline-flex items-center px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-700 transition-colors"
+                        >
+                          <TrendingUp className="w-4 h-4 mr-2" />
+                          Marcar como Dispersado
+                        </button>
+                      </>
+                    )}
+
+                    {/* TODOS LOS BOTONES DE DESCARGA - Solo cuando está dispersado */}
+                    {request.status === 'dispersed' && request.simulation && (
+                      <div className="w-full p-4 bg-emerald-50 rounded-lg border-2 border-emerald-200">
+                        <h4 className="text-sm font-bold text-emerald-900 mb-3 flex items-center">
+                          <FileCheck className="w-4 h-4 mr-2" />
+                          💰 Crédito Dispersado - Descargas Disponibles
+                        </h4>
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                          {/* Cotización Completa */}
+                          <button
+                            onClick={() => handleDownloadQuoteComplete(request)}
+                            className="inline-flex items-center justify-center px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg hover:bg-blue-700 transition-colors"
+                            title="Descargar cotización con tabla de amortización"
+                          >
+                            <FileText className="w-4 h-4 mr-2" />
+                            Cotización Completa
+                          </button>
+
+                          {/* Solicitud de Crédito */}
+                          <button
+                            onClick={() => handleDownloadCreditApplication(request)}
+                            className="inline-flex items-center justify-center px-4 py-2 bg-purple-600 text-white text-sm font-medium rounded-lg hover:bg-purple-700 transition-colors"
+                            title="Descargar solicitud de crédito"
+                          >
+                            <Download className="w-4 h-4 mr-2" />
+                            Solicitud de Crédito
+                          </button>
+
+                          {/* Carta de Autorización al Cliente */}
+                          <button
+                            onClick={() => handleDownloadClientLetter(request)}
+                            className="inline-flex items-center justify-center px-4 py-2 bg-green-600 text-white text-sm font-medium rounded-lg hover:bg-green-700 transition-colors"
+                            title="Carta de autorización para el cliente"
+                          >
+                            <FileCheck className="w-4 h-4 mr-2" />
+                            Carta de Autorización
+                          </button>
+
+                          {/* Autorización para Socios */}
+                          {request.authorization_data && (
+                            <button
+                              onClick={() => handleDownloadPDF(request)}
+                              className="inline-flex items-center justify-center px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors"
+                              title="Autorización para socios"
+                            >
+                              <FileCheck className="w-4 h-4 mr-2" />
+                              Autorización Socios
+                            </button>
+                          )}
+                        </div>
+                      </div>
                     )}
 
                     {/* Rechazar - Solo el asesor asignado o solicitudes pendientes */}

@@ -124,7 +124,7 @@ export interface AuthorizationRequest {
   id: string
   simulation_id?: string
   quote_id?: string
-  status: 'pending' | 'approved' | 'rejected' | 'in_review'
+  status: 'pending' | 'in_review' | 'advisor_approved' | 'internal_committee' | 'partners_committee' | 'approved' | 'dispersed' | 'rejected' | 'cancelled'
   priority: 'low' | 'medium' | 'high' | 'urgent'
   
   // Información del cliente
@@ -166,6 +166,10 @@ export interface AuthorizationRequest {
   reviewed_at?: string
   approved_at?: string
   rejected_at?: string
+  dispersed_at?: string
+  
+  // Usuario que dispersó
+  dispersed_by?: string
   
   // Relaciones (opcional, para cuando se incluyen en las queries)
   simulation?: Simulation

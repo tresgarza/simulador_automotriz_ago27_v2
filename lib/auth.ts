@@ -140,6 +140,7 @@ export class AuthService {
     if (typeof window !== 'undefined') {
       // Clear all auth-related localStorage items
       localStorage.removeItem('auth_user')
+      localStorage.removeItem('current_user') // IMPORTANTE: Limpiar también current_user
       localStorage.removeItem('user_session')
       localStorage.removeItem('user_preferences')
       localStorage.removeItem('cached_rates')
@@ -156,6 +157,9 @@ export class AuthService {
           document.cookie = `${name}=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/`
         }
       })
+      
+      // Disparar evento personalizado para que useAuth se actualice
+      window.dispatchEvent(new CustomEvent('auth-changed'))
     }
   }
 
@@ -231,15 +235,94 @@ export class AuthService {
 
 // Hook para usar en componentes React
 export function useAuth() {
-  const [user, setUser] = useState<AuthUser | null>(null)
+  // ✅ INICIALIZAR ESTADO CON USUARIO DESDE localStorage
+  const [user, setUser] = useState<AuthUser | null>(() => {
+    if (typeof window === 'undefined') return null
+    
+    // Cargar usuario inmediatamente al inicializar el estado
+    const authUser = localStorage.getItem('auth_user')
+    const currentUserStr = localStorage.getItem('current_user')
+    
+    console.log('🚀 [INIT] useAuth - auth_user:', authUser ? 'exists' : 'null')
+    console.log('🚀 [INIT] useAuth - current_user:', currentUserStr ? 'exists' : 'null')
+    
+    if (authUser) {
+      try {
+        const user = JSON.parse(authUser)
+        console.log('✅ [INIT] useAuth - Usuario inicial desde auth_user:', user.name, user.user_type)
+        return user
+      } catch { 
+        console.error('❌ [INIT] useAuth - Error parsing auth_user')
+      }
+    } else if (currentUserStr) {
+      try {
+        const user = JSON.parse(currentUserStr)
+        console.log('✅ [INIT] useAuth - Usuario inicial desde current_user:', user.name, user.user_type)
+        
+        // 🔧 FIX: Si el usuario es asesor/admin, sincronizar inmediatamente a auth_user
+        if (user.user_type === 'asesor' || user.user_type === 'admin') {
+          console.log('🔄 [SYNC-INIT] Sincronizando asesor de current_user → auth_user')
+          localStorage.setItem('auth_user', currentUserStr)
+        }
+        
+        return user
+      } catch { 
+        console.error('❌ [INIT] useAuth - Error parsing current_user')
+      }
+    }
+    
+    console.log('❌ [INIT] useAuth - No user found')
+    return null
+  })
+  
   const [isVerified, setIsVerified] = useState(false)
+
+  // Función para cargar el usuario desde localStorage
+  const loadUser = () => {
+    // PRIORIDAD: Intentar cargar desde `auth_user` primero (asesores/agencias)
+    const authUser = localStorage.getItem('auth_user')
+    const currentUserStr = localStorage.getItem('current_user')
+    
+    console.log('🔍 [DEBUG] loadUser - auth_user:', authUser ? 'exists' : 'null')
+    console.log('🔍 [DEBUG] loadUser - current_user:', currentUserStr ? 'exists' : 'null')
+    
+    if (authUser) {
+      try {
+        const user = JSON.parse(authUser)
+        console.log('✅ [DEBUG] loadUser - Cargando desde auth_user:', user.name, user.user_type)
+        setUser(user)
+        return user
+      } catch { 
+        console.error('❌ [DEBUG] loadUser - Error parsing auth_user')
+      }
+    } else if (currentUserStr) {
+      try {
+        const user = JSON.parse(currentUserStr)
+        console.log('✅ [DEBUG] loadUser - Cargando desde current_user:', user.name, user.user_type)
+        
+        // 🔧 FIX: Si el usuario es asesor/admin, sincronizar a auth_user para evitar pérdidas
+        if (user.user_type === 'asesor' || user.user_type === 'admin') {
+          console.log('🔄 [SYNC] Sincronizando asesor de current_user → auth_user')
+          localStorage.setItem('auth_user', currentUserStr)
+        }
+        
+        setUser(user)
+        return user
+      } catch { 
+        console.error('❌ [DEBUG] loadUser - Error parsing current_user')
+      }
+    }
+    
+    console.log('❌ [DEBUG] loadUser - No user found')
+    setUser(null)
+    return null
+  }
 
   useEffect(() => {
     if (typeof window === 'undefined') return
 
-    // Obtener usuario inicial
-    const currentUser = AuthService.getCurrentUser()
-    setUser(currentUser)
+    // Obtener usuario inicial (solo si no hay usuario ya cargado)
+    const currentUser = user || loadUser()
 
     // Verificar sesión con el servidor al cargar
     if (currentUser) {
@@ -252,6 +335,27 @@ export function useAuth() {
         }
       })
     }
+
+    // IMPORTANTE: Escuchar cambios en localStorage (login/logout desde otro componente)
+    const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'current_user' || e.key === 'auth_user') {
+        console.log('🔄 Detectado cambio en localStorage:', e.key)
+        const newUser = loadUser()
+        console.log('👤 Usuario actualizado:', newUser?.name || 'ninguno')
+      }
+    }
+
+    // Escuchar eventos de storage (cambios desde otra pestaña)
+    window.addEventListener('storage', handleStorageChange)
+
+    // IMPORTANTE: Escuchar también cambios manuales en la misma pestaña
+    // mediante un evento personalizado
+    const handleCustomAuthChange = () => {
+      console.log('🔄 Detectado cambio manual de autenticación')
+      loadUser()
+    }
+
+    window.addEventListener('auth-changed', handleCustomAuthChange)
 
     // Verificar sesión periódicamente (cada 5 minutos)
     const verificationInterval = setInterval(() => {
@@ -270,7 +374,11 @@ export function useAuth() {
       }
     }, 5 * 60 * 1000) // 5 minutos
 
-    return () => clearInterval(verificationInterval)
+    return () => {
+      clearInterval(verificationInterval)
+      window.removeEventListener('storage', handleStorageChange)
+      window.removeEventListener('auth-changed', handleCustomAuthChange)
+    }
   }, [])
 
   const logout = () => {

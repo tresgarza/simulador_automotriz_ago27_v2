@@ -3,37 +3,29 @@
 import React, { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { Home, FileText, Users, Calculator, FolderOpen, LogIn, User, LogOut } from 'lucide-react'
-import { EmailLoginModal } from '../auth/EmailLoginModal'
+import { Home, FileText, Users, Calculator, FolderOpen, LogIn, User as UserIcon, LogOut, Shield } from 'lucide-react'
+import { LoginModal } from '../auth/LoginModal'
 import { QuickRegistrationModal } from '../auth/QuickRegistrationModal'
 import { UserRegistrationService } from '../../lib/user-registration-service'
-import { useAuth } from '../../lib/auth'
+import { useAuth, User } from '../../lib/auth'
 
 export default function MainNavigation() {
   const pathname = usePathname()
-  const { user: authUser, isLoggedIn, logout: authLogout } = useAuth()
-  const [currentUser, setCurrentUser] = useState<any>(null)
+  const { user, isLoggedIn, logout: authLogout } = useAuth()
   const [showLoginModal, setShowLoginModal] = useState(false)
   const [showRegistrationModal, setShowRegistrationModal] = useState(false)
+  const [isHydrated, setIsHydrated] = useState(false)
 
-  // Verificar usuario al cargar
+  // Hidratación del cliente
   useEffect(() => {
-    const savedUser = localStorage.getItem('current_user')
-    if (savedUser) {
-      try {
-        const user = JSON.parse(savedUser)
-        setCurrentUser(user)
-      } catch (error) {
-        console.error('Error parsing saved user:', error)
-        localStorage.removeItem('current_user')
-      }
-    }
+    setIsHydrated(true)
   }, [])
 
-  const handleLoginSuccess = (userData: any) => {
-    localStorage.setItem('current_user', JSON.stringify(userData))
-    setCurrentUser(userData)
+  const handleLoginSuccess = () => {
     setShowLoginModal(false)
+    
+    // Disparar evento personalizado para que useAuth detecte el cambio
+    window.dispatchEvent(new CustomEvent('auth-changed'))
   }
 
   const handleRegistrationSuccess = async (userData: any) => {
@@ -44,10 +36,34 @@ export default function MainNavigation() {
         alert('Error al crear cuenta: ' + error)
         return
       }
+      
+      // Vincular sesión de invitado si existe
+      if (typeof window !== 'undefined') {
+        const guestSessionId = localStorage.getItem('guest_session_id')
+        
+        if (guestSessionId) {
+          // Actualizar cotizaciones, simulaciones y solicitudes del invitado
+          try {
+            // Actualizar cotizaciones
+            await fetch('/api/link-guest-session', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                guestSessionId,
+                userId: user.id
+              })
+            })
+          } catch (linkError) {
+            console.error('Error vinculando sesión:', linkError)
+          }
+        }
+      }
 
       localStorage.setItem('current_user', JSON.stringify(user))
-      setCurrentUser(user)
       setShowRegistrationModal(false)
+      
+      // Disparar evento personalizado para que useAuth detecte el cambio
+      window.dispatchEvent(new CustomEvent('auth-changed'))
     } catch (error) {
       console.error('Error in registration:', error)
       alert('Error al crear cuenta')
@@ -76,7 +92,7 @@ export default function MainNavigation() {
     ]
 
     // Solo mostrar "Mis Solicitudes" si hay usuario autenticado
-    if (currentUser) {
+    if (user) {
       baseItems.push({
         href: '/mis-solicitudes',
         label: 'Mis Solicitudes',
@@ -85,20 +101,20 @@ export default function MainNavigation() {
       })
     }
 
-    // Solo mostrar Dashboard a asesores y agencias
-    if (currentUser && (currentUser.user_type === 'asesor' || currentUser.user_type === 'agency')) {
+    // Solo mostrar Autorizaciones a asesores y agencias
+    if (user && (user.user_type === 'asesor' || user.user_type === 'agency')) {
       baseItems.push({
-        href: '/dashboard-asesores',
-        label: 'Dashboard',
-        icon: Users,
-        description: 'Gestionar solicitudes'
+        href: '/autorizaciones',
+        label: 'Autorizaciones',
+        icon: Shield,
+        description: 'Portal de autorizaciones'
       })
     }
 
     return baseItems
   }
 
-  const navItems = getNavItems()
+  const navItems = isHydrated ? getNavItems() : []
 
   return (
     <nav className="bg-white shadow-sm border-b">
@@ -142,14 +158,14 @@ export default function MainNavigation() {
 
           {/* User Section */}
           <div className="hidden md:flex items-center space-x-3">
-            {currentUser ? (
+            {isHydrated && isLoggedIn && user ? (
               <div className="flex items-center space-x-3">
                 {/* User Info */}
                 <div className="flex items-center space-x-2 px-3 py-2 bg-green-50 rounded-lg">
-                  <User className="h-4 w-4 text-green-600" />
+                  <UserIcon className="h-4 w-4 text-green-600" />
                   <div className="text-sm">
-                    <p className="font-medium text-green-800">{currentUser.name}</p>
-                    <p className="text-green-600 text-xs">{UserRegistrationService.formatPhone(currentUser.phone)}</p>
+                    <p className="font-medium text-green-800">{user.name}</p>
+                    <p className="text-green-600 text-xs">{user.phone ? UserRegistrationService.formatPhone(user.phone) : user.email}</p>
                   </div>
                 </div>
                 
@@ -179,7 +195,7 @@ export default function MainNavigation() {
                   onClick={() => setShowRegistrationModal(true)}
                   className="flex items-center space-x-2 px-4 py-2 text-sm font-medium text-white bg-green-600 hover:bg-green-700 rounded-lg transition-colors"
                 >
-                  <User className="h-4 w-4" />
+                  <UserIcon className="h-4 w-4" />
                   <span>Crear Cuenta</span>
                 </button>
               </div>
@@ -228,10 +244,10 @@ export default function MainNavigation() {
       </div>
 
       {/* Modals */}
-      <EmailLoginModal
+      <LoginModal
         isOpen={showLoginModal}
         onClose={() => setShowLoginModal(false)}
-        onSuccess={handleLoginSuccess}
+        onLoginSuccess={handleLoginSuccess}
       />
 
       <QuickRegistrationModal

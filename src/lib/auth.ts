@@ -3,10 +3,11 @@
 import { useState, useEffect, useCallback } from 'react'
 import { GuestSessionService } from './guest-session-service'
 
-interface User {
+export interface User {
   id: string
   email: string
   name: string
+  phone?: string
   user_type: 'client' | 'asesor' | 'agency' | 'admin'
   created_at?: string
 }
@@ -42,19 +43,41 @@ export function useAuth() {
     })
   }, [])
 
-  // Cargar usuario desde localStorage al inicializar
+  // Cargar usuario desde localStorage al inicializar y escuchar cambios
   useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const savedUser = localStorage.getItem('current_user')
-      if (savedUser) {
-        try {
-          const user = JSON.parse(savedUser)
-          updateAuthState(user)
-        } catch (error) {
-          console.error('Error parsing saved user:', error)
-          localStorage.removeItem('current_user')
+    const loadUserFromStorage = () => {
+      if (typeof window !== 'undefined') {
+        const savedUser = localStorage.getItem('current_user')
+        if (savedUser) {
+          try {
+            const user = JSON.parse(savedUser)
+            console.log('🔍 [DEBUG] useAuth - Cargando usuario desde localStorage:', user.name);
+            updateAuthState(user)
+          } catch (error) {
+            console.error('Error parsing saved user:', error)
+            localStorage.removeItem('current_user')
+            updateAuthState(null)
+          }
+        } else {
           updateAuthState(null)
         }
+      }
+    }
+
+    // Cargar usuario inicial
+    loadUserFromStorage()
+
+    // Escuchar cambios de autenticación
+    const handleAuthChange = () => {
+      console.log('🔄 [DEBUG] useAuth - Evento auth-changed recibido, recargando usuario...')
+      loadUserFromStorage()
+    }
+
+    if (typeof window !== 'undefined') {
+      window.addEventListener('auth-changed', handleAuthChange)
+      
+      return () => {
+        window.removeEventListener('auth-changed', handleAuthChange)
       }
     }
   }, [updateAuthState])

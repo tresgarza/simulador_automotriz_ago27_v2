@@ -25,18 +25,23 @@ export interface CreditApplication {
   marital_status?: string
   curp?: string
   rfc_with_homoclave?: string
+  rfc_homoclave?: string // Homoclave separada
   nss?: string
   birth_date?: string
+  birth_country?: string // País de nacimiento
   gender?: string
   nationality?: string
   birth_state?: string
   education_level?: string
+  electronic_signature_series?: string // Serie firma electrónica
+  dependents_count?: number // Número de dependientes
   
   // B) Contacto
   personal_email?: string
   work_email?: string
   mobile_phone?: string
   landline_phone?: string
+  emergency_phone?: string // Teléfono de recados
   
   // B) Domicilio
   street_and_number?: string
@@ -48,10 +53,13 @@ export interface CreditApplication {
   postal_code?: string
   housing_type?: string
   residence_years?: number
+  country?: string // País
   
   // C) Empleo e ingresos
   company_name?: string
   job_position?: string
+  occupation?: string // Ocupación
+  immediate_supervisor?: string // Jefe inmediato
   job_seniority_years?: number
   job_seniority_months?: number
   monthly_income?: number
@@ -150,24 +158,41 @@ export interface CreateCreditApplicationData {
   product_type?: string
   requested_amount?: number
   term_months?: number
+  monthly_payment?: number
   payment_frequency?: string
   resource_usage?: string
+  
+  // Información del vehículo y crédito
+  vehicle_brand?: string
+  vehicle_model?: string
+  vehicle_year?: number
+  vehicle_value?: number
+  down_payment_amount?: number
+  insurance_amount?: number
+  insurance_mode?: string
+  branch?: string
+  collecting_advisor_name?: string
   paternal_surname?: string
   maternal_surname?: string
   first_names?: string
   marital_status?: string
   curp?: string
   rfc_with_homoclave?: string
+  rfc_homoclave?: string
   nss?: string
   birth_date?: string
+  birth_country?: string
   gender?: string
   nationality?: string
   birth_state?: string
   education_level?: string
+  electronic_signature_series?: string
+  dependents_count?: number
   personal_email?: string
   work_email?: string
   mobile_phone?: string
   landline_phone?: string
+  emergency_phone?: string
   street_and_number?: string
   interior_number?: string
   between_streets?: string
@@ -177,8 +202,11 @@ export interface CreateCreditApplicationData {
   postal_code?: string
   housing_type?: string
   residence_years?: number
+  country?: string
   company_name?: string
   job_position?: string
+  occupation?: string
+  immediate_supervisor?: string
   job_seniority_years?: number
   job_seniority_months?: number
   monthly_income?: number
@@ -215,7 +243,6 @@ export interface CreateCreditApplicationData {
   sic_authorization?: boolean
   sic_authorization_date?: string
   sic_authorization_place?: string
-  collecting_advisor_name?: string
   privacy_notice_accepted?: boolean
   privacy_notice_date?: string
   marketing_consent?: boolean
@@ -304,25 +331,41 @@ export class CreditApplicationService {
    * Obtener solicitudes del usuario actual (registrado o invitado)
    * Para usuarios registrados, intenta reclamar solicitudes huérfanas automáticamente
    */
-  static async getCurrentUserApplications(userId?: string, userEmail?: string, userName?: string): Promise<{
+  static async getCurrentUserApplications(userId?: string, userEmail?: string, userName?: string, claimOnFirstLoad: boolean = false): Promise<{
     applications: CreditApplication[]
     error: string | null
     claimed_count?: number
   }> {
     try {
       if (userId) {
-        // Usuario registrado - intentar reclamar solicitudes huérfanas primero
-        if (userEmail) {
+        // Usuario registrado - SOLO reclamar en primera carga (evitar duplicados)
+        if (userEmail && claimOnFirstLoad) {
           try {
-            console.log('🔍 Intentando reclamar solicitudes huérfanas para usuario:', userId)
+            console.log('🔍 Intentando reclamar solicitudes huérfanas para usuario (primera carga):', userId)
             await this.claimUserApplications(userId, userEmail, userName)
           } catch (claimError) {
             console.warn('⚠️ Error reclamando solicitudes (continuando):', claimError)
           }
         }
         
-        // Obtener solicitudes del usuario
-        return this.getCreditApplications({ created_by: userId })
+        // Obtener el guest_session_id actual del localStorage para incluir solicitudes de invitado
+        let guestSessionId: string | null = null
+        try {
+          const currentSession = localStorage.getItem('guest_session')
+          if (currentSession) {
+            const session = JSON.parse(currentSession)
+            guestSessionId = session.id
+            console.log('📦 Guest session ID encontrado:', guestSessionId)
+          }
+        } catch (error) {
+          console.warn('⚠️ Error obteniendo guest_session_id:', error)
+        }
+        
+        // Obtener solicitudes del usuario Y de la sesión de invitado
+        return this.getCreditApplications({ 
+          created_by: userId,
+          guest_session_id: guestSessionId || undefined
+        })
       } else {
         // Usuario invitado - usar sesión
         const sessionToken = GuestSessionService.getCurrentSessionToken()
@@ -387,6 +430,7 @@ export class CreditApplicationService {
   static async getCreditApplications(filters?: {
     status?: string
     created_by?: string
+    guest_session_id?: string
     quote_id?: string
     folio_number?: string
     limit?: number
@@ -402,6 +446,7 @@ export class CreditApplicationService {
       const params = new URLSearchParams()
       if (filters?.status) params.append('status', filters.status)
       if (filters?.created_by) params.append('created_by', filters.created_by)
+      if (filters?.guest_session_id) params.append('guest_session_id', filters.guest_session_id)
       if (filters?.quote_id) params.append('quote_id', filters.quote_id)
       if (filters?.folio_number) params.append('folio_number', filters.folio_number)
       if (filters?.limit) params.append('limit', filters.limit.toString())
@@ -579,6 +624,9 @@ export class CreditApplicationService {
       // Obtener meses desde simulación o usar default
       const termMonths = simulation?.term_months || 48 // Default 48 meses
       
+      // Obtener pago mensual desde simulación
+      const monthlyPayment = simulation?.monthly_payment || null
+      
       // Mapear datos de cotización y simulación a solicitud
       const prefillData: Partial<CreateCreditApplicationData> = {
         quote_id: quote.id,
@@ -586,14 +634,28 @@ export class CreditApplicationService {
         
         // Datos básicos - SIEMPRE AUTOMOTRIZ Y MENSUAL
         product_type: 'Auto',
-        payment_frequency: 'mensual', // Cambiar a mensual como solicitas
+        payment_frequency: 'mensual',
         
         // Datos financieros desde simulación
         requested_amount: requestedAmount,
         term_months: termMonths,
+        monthly_payment: monthlyPayment,
+        
+        // Datos del vehículo desde cotización
+        vehicle_brand: quote.vehicle_brand,
+        vehicle_model: quote.vehicle_model,
+        vehicle_year: quote.vehicle_year,
+        vehicle_value: quote.vehicle_value,
+        down_payment_amount: quote.down_payment_amount,
+        insurance_amount: quote.insurance_amount,
+        insurance_mode: quote.insurance_mode || 'cash',
+        
+        // Agencia/sucursal (usar ambos campos para compatibilidad)
+        branch: quote.vendor_name || quote.agency_name,
+        branch_office: quote.vendor_name || quote.agency_name,
         
         // Datos personales - SOLO LO BÁSICO
-        first_names: firstName, // Solo primera palabra del nombre
+        first_names: firstName,
         personal_email: quote.client_email,
         mobile_phone: quote.client_phone,
         
@@ -656,7 +718,10 @@ export class CreditApplicationService {
       'reference_1_relationship',
       'reference_1_phone1',
       'privacy_notice_accepted',
-      'sic_authorization'
+      'sic_authorization',
+      'vehicle_value',
+      'requested_amount',
+      'term_months'
     ]
 
     const missingFields = requiredFields.filter(field => {

@@ -16,6 +16,10 @@ interface Summary {
   opening_fee_iva: number;
   gps: number;
   gps_iva: number;
+  // Campos adicionales desde Supabase
+  financed_amount?: number;
+  total_to_finance?: number;
+  monthly_payment?: number;
 }
 
 interface Schedule {
@@ -33,8 +37,8 @@ interface Schedule {
 }
 
 interface PDFData {
-  summary: Summary;
-  schedule: Schedule[];
+  summary?: Summary | any;
+  schedule?: Schedule[] | any[];
   vehicleValue: number;
   downPayment: number;
   insuranceAmount: number;
@@ -67,6 +71,7 @@ interface PDFData {
 export const generateProfessionalPDF = async (data: PDFData) => {
       const {
     summary,
+    schedule,
     vehicleValue,
     downPayment,
     insuranceAmount,
@@ -105,7 +110,7 @@ export const generateProfessionalPDF = async (data: PDFData) => {
     annualRate: selectedRate.annual,
     annualRateWithIVA: selectedRate.annualWithIVA,
     ivaRate: 0.16,
-    gpsMonthly: summary.gps,
+    gpsMonthly: summary?.gps || 400,
     lifeInsuranceMonthly: 300, // Valor fijo del Excel
     openingFeePercentage: 0.03
   };

@@ -38,6 +38,13 @@ export interface ProfessionalAuthorizationData {
   // Competidores (desde múltiples fuentes)
   competitors_data?: Array<{ name: string; price: number }>;
   
+  // Simulación (para acceder al enganche)
+  simulation?: {
+    quote?: {
+      down_payment_amount?: number;
+    };
+  };
+  
   // Datos del formulario (authorization_data)
   authorization_data?: {
     company?: string;
@@ -286,13 +293,43 @@ export const generateProfessionalAuthorizationPDF = async (data: ProfessionalAut
   rrow("Marca:", data.vehicle_brand || "", true);
   rrow("Modelo:", data.vehicle_model || "", true);
   rrow("Año:", String(data.vehicle_year||""));
+  rrow("Enganche:", money(data.simulation?.quote?.down_payment_amount || (data.authorization_data as any)?.down_payment || 0), true);
   rrow("Valor de venta:", money(data.vehicle_value), true);
 
   const comps = (S.competitors || data.competitors_data || [])
     .filter((c:any)=>c && c.name && c.price>0).slice(0,3);
   if (comps.length){ ry += 2; comps.forEach((c:any)=>{ rrow(`${c.name}:`, money(c.price), true); }); }
 
-  currentY = Math.max(leftBoxBottom, ry) + 8;
+  // ---- COMENTARIOS DEL ASESOR (sin recuadro, más compacto) ----
+  ry += 2; // Menos espacio después de los datos del carro
+  
+  // Título de comentarios (sin recuadro)
+  pdf.setFont('helvetica', 'bold');
+  pdf.setFontSize(9);
+  pdf.setTextColor(...colors.black);
+  pdf.text('COMENTARIOS:', M + COL + G, ry);
+  ry += 4;
+  
+  // Contenido de los comentarios
+  const comments = S.comments || "Sin comentarios adicionales";
+  pdf.setFont('helvetica', 'normal');
+  pdf.setFontSize(8);
+  pdf.setTextColor(...colors.gray);
+  
+  // Dividir el texto en líneas que quepan en la columna
+  const maxWidth = COL - 6; // ancho de la columna menos margen
+  const lines = pdf.splitTextToSize(comments, maxWidth);
+  
+  // Mostrar hasta 3 líneas de comentarios
+  const maxLines = 3;
+  const lineHeight = 3.5;
+  for (let i = 0; i < Math.min(lines.length, maxLines); i++) {
+    pdf.text(lines[i], M + COL + G, ry + (i * lineHeight));
+  }
+  
+  // Actualizar currentY considerando tanto la columna izquierda como la derecha (con comentarios)
+  const rightBoxBottom = ry + (Math.min(lines.length, maxLines) * lineHeight);
+  currentY = Math.max(leftBoxBottom, rightBoxBottom) + 6;
 
   // ---- INGRESOS (AutoTable)
   // Usar fechas personalizadas por el usuario, con fallback a etiquetas simples

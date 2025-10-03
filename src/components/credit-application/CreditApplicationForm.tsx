@@ -1,37 +1,24 @@
 'use client'
 
-import React, { useState, useEffect } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { Button } from '../ui/button'
 import { CreditApplicationService, CreateCreditApplicationData } from '../../lib/credit-application-service'
 import { useAuth } from '../../../lib/auth'
 import { 
   CreditSection, 
-  IdentitySection, 
+  PersonalSection, 
   EmploymentSection, 
   ReferencesSection 
-} from './FormSections'
-import { 
-  IdentificationSection,
-  DeclarationsSection,
-  AuthorizationSection,
-  PrivacySection,
-  MarketingSection,
-  InternalSection
-} from './AdditionalSections'
+} from './FormSectionsReorganized'
+import { DeclarationsSection } from './AdditionalSections'
 import { 
   User, 
-  Building2, 
-  Phone, 
-  MapPin, 
   Briefcase, 
   Users, 
   CreditCard, 
-  Shield, 
-  FileText, 
-  CheckCircle, 
+  Shield,
   AlertCircle,
   Save,
-  Send,
   Download,
   ArrowLeft,
   ArrowRight
@@ -62,13 +49,13 @@ const FORM_SECTIONS: FormSection[] = [
   },
   {
     id: 'identity',
-    title: 'B) Datos del Solicitante',
+    title: 'B) Información Personal',
     icon: <User className="w-5 h-5" />,
     description: 'Identidad, contacto y domicilio'
   },
   {
     id: 'employment',
-    title: 'C) Empleo e Ingresos',
+    title: 'C) Información del Empleo',
     icon: <Briefcase className="w-5 h-5" />,
     description: 'Información laboral y financiera'
   },
@@ -79,40 +66,10 @@ const FORM_SECTIONS: FormSection[] = [
     description: 'Contactos de referencia (mínimo 3)'
   },
   {
-    id: 'identification',
-    title: 'E) Identificaciones',
-    icon: <FileText className="w-5 h-5" />,
-    description: 'Documentos de identificación'
-  },
-  {
     id: 'declarations',
-    title: 'F) Declaraciones AML/PEP',
+    title: 'E) Declaraciones PEP',
     icon: <Shield className="w-5 h-5" />,
-    description: 'Declaraciones legales y origen de recursos'
-  },
-  {
-    id: 'authorization',
-    title: 'G) Autorización SIC',
-    icon: <CheckCircle className="w-5 h-5" />,
-    description: 'Consulta en Buró de Crédito'
-  },
-  {
-    id: 'privacy',
-    title: 'H) Aviso de Privacidad',
-    icon: <FileText className="w-5 h-5" />,
-    description: 'Consentimiento de datos personales'
-  },
-  {
-    id: 'marketing',
-    title: 'I) Consentimiento Marketing',
-    icon: <Send className="w-5 h-5" />,
-    description: 'Autorización para comunicaciones comerciales'
-  },
-  {
-    id: 'internal',
-    title: 'J) Uso Interno',
-    icon: <Building2 className="w-5 h-5" />,
-    description: 'Información administrativa'
+    description: 'Declaraciones requeridas por ley'
   }
 ]
 
@@ -125,19 +82,47 @@ export function CreditApplicationForm({
   prefillData
 }: CreditApplicationFormProps) {
   const { user } = useAuth()
+  
+  // Obtener usuario de localStorage si useAuth no funciona - MEMOIZADO
+  const getCurrentUserId = React.useCallback((): string | undefined => {
+    if (user?.id) return user.id
+    
+    if (typeof window !== 'undefined') {
+      const savedUser = localStorage.getItem('current_user')
+      if (savedUser) {
+        try {
+          const localUser = JSON.parse(savedUser)
+          return localUser.id
+        } catch (error) {
+          console.error('❌ Error parsing saved user:', error)
+        }
+      }
+    }
+    return undefined
+  }, [user?.id])
+  
   const [currentSection, setCurrentSection] = useState(0)
   const [formData, setFormData] = useState<CreateCreditApplicationData>({
     quote_id: quoteId,
     simulation_id: simulationId,
     product_type: 'Auto',
-    payment_frequency: 'quincenal',
+    payment_frequency: 'mensual',
     nationality: 'Mexicana',
+    birth_country: 'México',
     acts_for_self: true,
     resources_are_legal: true,
     privacy_notice_accepted: false,
     sic_authorization: false,
     marketing_consent: false,
-    created_by_user_id: user?.id,
+    created_by_user_id: getCurrentUserId(),
+    // Campos PEP inicializados
+    is_pep: false,
+    pep_position: '',
+    pep_period: '',
+    has_pep_relative: false,
+    pep_relative_name: '',
+    pep_relative_position: '',
+    pep_relative_relationship: '',
     ...prefillData
   })
   
@@ -149,29 +134,113 @@ export function CreditApplicationForm({
   const [applicationId, setApplicationId] = useState<string | null>(existingApplicationId || null)
   const [isCreatingApplication, setIsCreatingApplication] = useState(false)
   const creationInProgressRef = React.useRef(false)
+  const isInitializingRef = React.useRef(true) // Prevenir auto-save durante inicialización
+  const prefillAppliedRef = React.useRef(false) // Prevenir aplicación múltiple de prefill
+  
+  // Protección contra React Strict Mode - evitar ejecuciones múltiples
+  const prefillExecutedRef = useRef(false)
+  const existingAppLoadedRef = useRef(false)
 
-  // Pre-llenar desde cotización si se proporciona quoteId
+  // Auto-llenar nombre del asesor si el usuario es asesor
   useEffect(() => {
-    console.log('🔍 [DEBUG] CreditApplicationForm useEffect - quoteId:', quoteId, 'prefillData:', prefillData)
+    if (user && (user.user_type === 'asesor' || user.user_type === 'agency') && user.name) {
+      setFormData(prev => ({
+        ...prev,
+        collecting_advisor_name: user.name
+      }))
+    }
+  }, [user])
+
+  // Pre-llenar desde cotización si se proporciona quoteId (solo si NO hay prefillData desde página)
+  useEffect(() => {
+    // PROTECCIÓN: Solo ejecutar una vez, incluso en React Strict Mode
+    if (prefillExecutedRef.current) {
+      console.log('🚫 Prefill desde quote ya ejecutado - saltando')
+      return
+    }
     
     if (quoteId && !prefillData) {
+      prefillExecutedRef.current = true
       console.log('🔄 Obteniendo datos de pre-llenado desde cotización:', quoteId)
       CreditApplicationService.prefillFromQuote(quoteId, simulationId).then(({ data, error }) => {
         if (data && !error) {
-          console.log('✅ Datos de pre-llenado obtenidos:', data)
-          setFormData(prev => ({ ...prev, ...data }))
+          console.log('✅ Datos de pre-llenado obtenidos desde servicio:', data)
+          setFormData(prev => {
+            const updated = { ...prev, ...data }
+            console.log('📝 FormData actualizado:', updated)
+            return updated
+          })
         } else if (error) {
           console.warn('⚠️ No se pudo pre-llenar desde cotización:', error)
         }
+        
+        // Desactivar bandera después de intentar prefill
+        setTimeout(() => {
+          isInitializingRef.current = false
+          console.log('✅ Inicialización completa (desde quote) - auto-save ahora habilitado')
+        }, 2000) // Aumentado a 2 segundos
       })
-    } else if (prefillData) {
-      console.log('✅ Usando prefillData proporcionado:', prefillData)
+    } else if (!quoteId && !prefillData) {
+      // Si no hay quoteId ni prefillData, desactivar bandera inmediatamente
+      setTimeout(() => {
+        isInitializingRef.current = false
+        console.log('✅ Inicialización completa (sin prefill) - auto-save ahora habilitado')
+      }, 2000) // Aumentado a 2 segundos
     }
-  }, [quoteId, simulationId, prefillData])
+  }, [quoteId, simulationId])
+
+  // Aplicar prefillData cuando llegue desde la página - SOLO UNA VEZ
+  useEffect(() => {
+    if (prefillData && Object.keys(prefillData).length > 0 && !prefillAppliedRef.current) {
+      console.log('========================================')
+      console.log('📥 PREFILL DATA RECIBIDO EN FORMULARIO (PRIMERA VEZ)')
+      console.log('========================================')
+      console.log('🔍 Datos completos del prefill:', prefillData)
+      console.log('✅ Aplicando prefillData proporcionado desde página')
+      
+      // Marcar como aplicado INMEDIATAMENTE para evitar duplicados
+      prefillAppliedRef.current = true
+      
+      setFormData(prev => {
+        const updated = { ...prev, ...prefillData }
+        console.log('📝 FormData DESPUÉS de aplicar prefill:')
+        console.log('  🚗 Vehículo:')
+        console.log('    - vehicle_brand:', updated.vehicle_brand)
+        console.log('    - vehicle_model:', updated.vehicle_model)
+        console.log('    - vehicle_year:', updated.vehicle_year)
+        console.log('    - vehicle_value:', updated.vehicle_value)
+        console.log('  💰 Crédito:')
+        console.log('    - requested_amount:', updated.requested_amount)
+        console.log('    - term_months:', updated.term_months)
+        console.log('    - monthly_payment:', updated.monthly_payment)
+        console.log('    - down_payment_amount:', updated.down_payment_amount)
+        console.log('    - insurance_amount:', updated.insurance_amount)
+        console.log('  👤 Cliente:')
+        console.log('    - first_names:', updated.first_names)
+        console.log('    - personal_email:', updated.personal_email)
+        console.log('    - mobile_phone:', updated.mobile_phone)
+        console.log('========================================')
+        return updated
+      })
+      
+      // Desactivar bandera de inicialización después de aplicar prefill
+      setTimeout(() => {
+        isInitializingRef.current = false
+        console.log('✅ Inicialización completa - auto-save ahora habilitado')
+      }, 2000) // Aumentado a 2 segundos para evitar guardados prematuros
+    }
+  }, [prefillData])
 
   // Cargar datos de aplicación existente si se proporciona applicationId
   useEffect(() => {
+    // PROTECCIÓN: Solo ejecutar una vez, incluso en React Strict Mode
+    if (existingAppLoadedRef.current) {
+      console.log('🚫 Carga de aplicación existente ya ejecutada - saltando')
+      return
+    }
+    
     if (existingApplicationId) {
+      existingAppLoadedRef.current = true
       console.log('🔄 Cargando aplicación existente:', existingApplicationId)
       CreditApplicationService.getCreditApplication(existingApplicationId).then(({ application, error }) => {
         if (application && !error) {
@@ -180,6 +249,12 @@ export function CreditApplicationForm({
         } else if (error) {
           console.error('❌ Error cargando aplicación existente:', error)
         }
+        
+        // Desactivar bandera de inicialización
+        setTimeout(() => {
+          isInitializingRef.current = false
+          console.log('✅ Inicialización completa (aplicación existente) - auto-save ahora habilitado')
+        }, 2000)
       })
     }
   }, [existingApplicationId])
@@ -209,7 +284,7 @@ export function CreditApplicationForm({
       })
     }
 
-    // Guardado automático después de 3 segundos de inactividad (más tiempo para evitar spam)
+    // Guardado automático después de 5 segundos de inactividad (más tiempo para evitar spam y duplicados)
     if (autoSaveTimeoutRef.current) {
       clearTimeout(autoSaveTimeoutRef.current)
     }
@@ -218,13 +293,19 @@ export function CreditApplicationForm({
     if (!isAutoSaving && !isCreatingApplication && !creationInProgressRef.current) {
       autoSaveTimeoutRef.current = setTimeout(() => {
         handleAutoSave()
-      }, 3000)
+      }, 5000) // Aumentado a 5 segundos
     }
   }
 
   const autoSaveTimeoutRef = React.useRef<NodeJS.Timeout | null>(null)
   
   const handleAutoSave = async () => {
+    // Prevenir auto-save durante inicialización
+    if (isInitializingRef.current) {
+      console.log('⏭️ Saltando guardado automático: todavía inicializando')
+      return
+    }
+    
     // Validaciones más estrictas para evitar guardados innecesarios
     if (!formData.first_names || !formData.paternal_surname) {
       console.log('⏭️ Saltando guardado automático: datos mínimos faltantes')
@@ -242,8 +323,14 @@ export function CreditApplicationForm({
       if (applicationId) {
         // Ya existe una aplicación, solo actualizarla
         console.log('🔄 Actualizando aplicación existente:', applicationId)
+        
+        // IMPORTANTE: Asegurar que siempre tenga el created_by_user_id correcto
+        const userId = getCurrentUserId()
+        console.log('👤 created_by_user_id en actualización:', userId)
+        
         const result = await CreditApplicationService.updateCreditApplication(applicationId, {
           ...formData,
+          created_by_user_id: userId,
           status: 'draft'
         })
         if (!result.error) {
@@ -264,9 +351,14 @@ export function CreditApplicationForm({
         setIsCreatingApplication(true)
         creationInProgressRef.current = true
         
+        // IMPORTANTE: Asegurar que siempre tenga el created_by_user_id correcto
+        const userId = getCurrentUserId()
+        console.log('👤 created_by_user_id que se enviará:', userId)
+        
         try {
           const result = await CreditApplicationService.createCreditApplication({
             ...formData,
+            created_by_user_id: userId,
             status: 'draft'
           })
           if (result.application?.id && !result.error) {
@@ -326,13 +418,6 @@ export function CreditApplicationForm({
         if (!formData.reference_1_phone1) errors.reference_1_phone1 = 'Teléfono requerido'
         break
       
-      case 'authorization':
-        if (!formData.sic_authorization) errors.sic_authorization = 'Debe autorizar consulta en SIC'
-        break
-      
-      case 'privacy':
-        if (!formData.privacy_notice_accepted) errors.privacy_notice_accepted = 'Debe aceptar el aviso de privacidad'
-        break
     }
 
     setValidationErrors(errors)
@@ -356,32 +441,57 @@ export function CreditApplicationForm({
   const handleSaveDraft = async () => {
     setIsSaving(true)
     try {
+      console.log('🔍 [DEBUG] Guardando borrador - formData actual:', {
+        vehicle_brand: formData.vehicle_brand,
+        vehicle_model: formData.vehicle_model,
+        vehicle_year: formData.vehicle_year,
+        vehicle_value: formData.vehicle_value,
+        monthly_payment: formData.monthly_payment,
+        down_payment_amount: formData.down_payment_amount,
+        insurance_amount: formData.insurance_amount,
+        insurance_mode: formData.insurance_mode,
+        requested_amount: formData.requested_amount,
+        term_months: formData.term_months,
+        first_names: formData.first_names
+      })
+
       if (applicationId) {
         // Actualizar existente
+        const updateData = { ...formData, status: 'draft' }
+        console.log('🔄 [DEBUG] Actualizando solicitud existente:', applicationId)
+        console.log('🔄 [DEBUG] Datos a enviar:', updateData)
+        
         const { application, error } = await CreditApplicationService.updateCreditApplication(
           applicationId, 
-          { ...formData, status: 'draft' }
+          updateData
         )
         if (error) {
+          console.error('❌ Error actualizando borrador:', error)
           alert('Error al guardar borrador: ' + error)
         } else {
+          console.log('✅ Borrador actualizado exitosamente:', application?.folio_number)
+          setLastSaved(new Date())
           alert('Borrador guardado exitosamente')
         }
       } else {
         // Crear nuevo
-        const { application, error } = await CreditApplicationService.createCreditApplication({
-          ...formData,
-          status: 'draft'
-        })
+        const createData = { ...formData, status: 'draft' }
+        console.log('📝 [DEBUG] Creando nueva solicitud')
+        console.log('📝 [DEBUG] Datos a enviar:', createData)
+        
+        const { application, error } = await CreditApplicationService.createCreditApplication(createData)
         if (error) {
+          console.error('❌ Error creando borrador:', error)
           alert('Error al guardar borrador: ' + error)
         } else {
+          console.log('✅ Borrador creado exitosamente:', application?.folio_number)
           setApplicationId(application?.id || null)
+          setLastSaved(new Date())
           alert('Borrador guardado exitosamente')
         }
       }
     } catch (error) {
-      console.error('Error saving draft:', error)
+      console.error('💥 Error saving draft:', error)
       alert('Error al guardar borrador')
     } finally {
       setIsSaving(false)
@@ -440,23 +550,13 @@ export function CreditApplicationForm({
       case 'credit':
         return <CreditSection formData={formData} onChange={handleInputChange} errors={validationErrors} />
       case 'identity':
-        return <IdentitySection formData={formData} onChange={handleInputChange} errors={validationErrors} />
+        return <PersonalSection formData={formData} onChange={handleInputChange} errors={validationErrors} />
       case 'employment':
         return <EmploymentSection formData={formData} onChange={handleInputChange} errors={validationErrors} />
       case 'references':
         return <ReferencesSection formData={formData} onChange={handleInputChange} errors={validationErrors} />
-      case 'identification':
-        return <IdentificationSection formData={formData} onChange={handleInputChange} errors={validationErrors} />
       case 'declarations':
         return <DeclarationsSection formData={formData} onChange={handleInputChange} errors={validationErrors} />
-      case 'authorization':
-        return <AuthorizationSection formData={formData} onChange={handleInputChange} errors={validationErrors} />
-      case 'privacy':
-        return <PrivacySection formData={formData} onChange={handleInputChange} errors={validationErrors} />
-      case 'marketing':
-        return <MarketingSection formData={formData} onChange={handleInputChange} errors={validationErrors} />
-      case 'internal':
-        return <InternalSection formData={formData} onChange={handleInputChange} errors={validationErrors} />
       default:
         return null
     }
@@ -580,7 +680,7 @@ export function CreditApplicationForm({
               disabled={isSubmitting || completionPercentage < 80}
               className="bg-green-600 hover:bg-green-700"
             >
-              <Send className="w-4 h-4 mr-2" />
+              <Save className="w-4 h-4 mr-2" />
               {isSubmitting ? 'Enviando...' : 'Enviar Solicitud'}
             </Button>
           )}

@@ -3,11 +3,9 @@ import { useMemo, useState, useEffect } from "react";
 import { brand } from "@/styles/theme";
 import { EnhancedQuoteForm, type EnhancedFormData } from "@/components/form/EnhancedQuoteForm";
 import { SummaryCard } from "@/components/summary/SummaryCard";
-import { LoginModal } from "@/components/auth/LoginModal";
 import { UserMenu } from "@/components/auth/UserMenu";
-import { AsesorDashboard } from "@/components/dashboard/AsesorDashboard";
-import { useAuth, AuthService } from "../../lib/auth";
-import { LogIn, User, BarChart3 } from "lucide-react";
+import { useAuth } from "../../lib/auth";
+import { User } from "lucide-react";
 
 type ApiResult = {
   summary: {
@@ -49,10 +47,8 @@ export default function Home() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [showResults, setShowResults] = useState(false);
   const [formData, setFormData] = useState<EnhancedFormData | null>(null);
-  const [showLoginModal, setShowLoginModal] = useState(false);
   const [currentQuoteId, setCurrentQuoteId] = useState<string | null>(null);
-  const [selectedSimulationId, setSelectedSimulationId] = useState<string | null>(null);
-  const [showDashboard, setShowDashboard] = useState(false);
+  const [simulationMap, setSimulationMap] = useState<Record<string, string>>({});
   const [isClient, setIsClient] = useState(false);
 
   const { user, isLoggedIn, isAsesor, isAgency, isClient: authIsClient, getAvailableRates } = useAuth();
@@ -137,9 +133,9 @@ export default function Home() {
     return null;
   };
 
-  const saveSimulationsToDatabase = async (quoteId: string, results: MatrixResult): Promise<string | null> => {
+  const saveSimulationsToDatabase = async (quoteId: string, results: MatrixResult): Promise<Record<string, string>> => {
     const availableRates = getAvailableRates();
-    let firstSimulationId: string | null = null;
+    const simulationMap: Record<string, string> = {}; // Mapa de "TIER-TERM" => simulation_id
     
     for (const tierCode of availableRates) {
       const tierResults = results[tierCode as keyof MatrixResult];
@@ -185,21 +181,20 @@ export default function Home() {
             console.error('📊 Simulation data that failed:', simulationData);
           } else {
             const result = await response.json();
-            console.log('✅ Simulation saved successfully:', result);
             
-            // Capturar el ID de la primera simulación guardada
-            if (!firstSimulationId && result.simulation?.id) {
-              firstSimulationId = result.simulation.id;
-              console.log('🎯 Primera simulación ID capturada:', firstSimulationId);
+            // Guardar el ID en el mapa usando "TIER-TERM" como clave
+            if (result.simulation?.id) {
+              const key = `${tierCode}-${termMonths}`;
+              simulationMap[key] = result.simulation.id;
             }
           }
         } catch (error) {
-          console.error('❌ Network error saving simulation:', error);
+          console.error('Error saving simulation:', error);
         }
       }
     }
     
-    return firstSimulationId;
+    return simulationMap;
   };
 
   const onSubmit = async (data: EnhancedFormData) => {
@@ -216,13 +211,7 @@ export default function Home() {
 
       // Obtener tasas y términos disponibles según el tipo de usuario
       const availableRates = getAvailableRates();
-      const availableTerms = AuthService.getAvailableTerms();
-      const terms: Term[] = availableTerms as Term[];
-      
-      // Debug logs
-      console.log('🔍 Debug - User:', user);
-      console.log('🔍 Debug - Available rates:', availableRates);
-      console.log('🔍 Debug - Available terms:', availableTerms);
+      const terms: Term[] = [24, 36, 48, 60]; // Todos los términos disponibles
       
       const tierPromises = availableRates.map(async (tier) => {
         const termResults = await Promise.all(
@@ -285,10 +274,10 @@ export default function Home() {
 
       // Guardar simulaciones en base de datos
       if (quoteId) {
-        const simulationId = await saveSimulationsToDatabase(quoteId, matrix);
-        if (simulationId) {
-          setSelectedSimulationId(simulationId);
-          console.log('🎯 Simulation ID establecido:', simulationId);
+        const simMap = await saveSimulationsToDatabase(quoteId, matrix);
+        if (Object.keys(simMap).length > 0) {
+          setSimulationMap(simMap);
+          console.log('🎯 Mapa de simulaciones establecido:', simMap);
         }
       }
 
@@ -299,32 +288,7 @@ export default function Home() {
     }
   };
 
-  const handleLoginSuccess = () => {
-    // Refresh para actualizar el estado de autenticación
-    window.location.reload();
-  };
-
   const gradient = useMemo(() => ({ background: brand.gradient }), []);
-
-  // Mostrar dashboard si es asesor y está en modo dashboard
-  if (showDashboard && isAsesor) {
-    return (
-      <div className="min-h-screen bg-gray-50">
-        <div className="bg-white shadow-sm border-b border-gray-200 p-4">
-          <div className="max-w-7xl mx-auto flex items-center justify-between">
-            <button
-              onClick={() => setShowDashboard(false)}
-              className="flex items-center text-gray-600 hover:text-gray-900"
-            >
-              ← Volver al Simulador
-            </button>
-            <UserMenu />
-          </div>
-        </div>
-        <AsesorDashboard />
-      </div>
-    );
-  }
 
   return (
     <div className="min-h-screen relative overflow-hidden" style={gradient}>
@@ -338,35 +302,6 @@ export default function Home() {
       <div className="relative z-10 mx-auto max-w-7xl p-6 sm:p-10">
         {/* Header con autenticación */}
         <header className="text-center text-white mb-12">
-          {/* Top Bar con Login/User Menu */}
-          <div className="flex justify-between items-center mb-8">
-            <div></div> {/* Spacer */}
-            <div className="flex items-center space-x-4">
-              {isClient && isLoggedIn ? (
-                <div className="flex items-center space-x-4">
-                  {isAsesor && (
-                    <button
-                      onClick={() => setShowDashboard(true)}
-                      className="flex items-center space-x-2 bg-white/10 backdrop-blur border border-white/20 rounded-2xl px-4 py-2 text-white hover:bg-white/20 transition-all"
-                    >
-                      <BarChart3 className="w-4 h-4" />
-                      <span>Dashboard</span>
-                    </button>
-                  )}
-                  <UserMenu />
-                </div>
-              ) : (
-                <button
-                  onClick={() => setShowLoginModal(true)}
-                  className="flex items-center space-x-2 bg-white/10 backdrop-blur border border-white/20 rounded-2xl px-4 py-2 text-white hover:bg-white/20 transition-all"
-                >
-                  <LogIn className="w-4 h-4" />
-                  <span>Iniciar Sesión</span>
-                </button>
-              )}
-            </div>
-          </div>
-
           {/* Logo de Financiera Incentiva */}
           <div className="mb-8 flex justify-center">
             <img 
@@ -430,19 +365,12 @@ export default function Home() {
               vendorName={formData?.vendor_name}
               dealerAgency={formData?.dealer_agency}
               currentQuoteId={currentQuoteId}
-              selectedSimulationId={selectedSimulationId}
+              simulationMap={simulationMap}
             />
           </div>
         </div>
 
       </div>
-
-      {/* Login Modal */}
-      <LoginModal 
-        isOpen={showLoginModal}
-        onClose={() => setShowLoginModal(false)}
-        onLoginSuccess={handleLoginSuccess}
-      />
     </div>
   );
 }

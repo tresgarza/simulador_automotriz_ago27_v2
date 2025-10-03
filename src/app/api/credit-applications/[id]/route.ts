@@ -4,10 +4,10 @@ import { supabaseClient } from '../../../../../lib/supabase'
 // VERSIÓN DE EMERGENCIA - MINIMALISTA SIN RELACIONES
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = params
+    const { id } = await params
     const body = await request.json()
 
     if (!id) {
@@ -19,11 +19,24 @@ export async function PUT(
 
     console.log('🔧 [BACKUP] Updating credit application:', id)
     console.log('🔧 [BACKUP] Body keys received:', Object.keys(body))
-    console.log('🔧 [BACKUP] Sample body data:', {
+    console.log('🔧 [BACKUP] Vehicle data received:', {
+      vehicle_brand: body.vehicle_brand,
+      vehicle_model: body.vehicle_model,
+      vehicle_year: body.vehicle_year,
+      vehicle_value: body.vehicle_value,
+      monthly_payment: body.monthly_payment,
+      down_payment_amount: body.down_payment_amount,
+      insurance_amount: body.insurance_amount,
+      insurance_mode: body.insurance_mode
+    })
+    console.log('🔧 [BACKUP] Credit data received:', {
       product_type: body.product_type,
       requested_amount: body.requested_amount,
+      term_months: body.term_months,
       payment_frequency: body.payment_frequency,
-      resource_usage: body.resource_usage,
+      resource_usage: body.resource_usage
+    })
+    console.log('🔧 [BACKUP] Personal data received:', {
       first_names: body.first_names,
       nationality: body.nationality
     })
@@ -46,16 +59,33 @@ export async function PUT(
       payment_frequency: body.payment_frequency,
       resource_usage: body.resource_usage,
       
+      // Información del vehículo
+      vehicle_brand: body.vehicle_brand,
+      vehicle_model: body.vehicle_model,
+      vehicle_year: body.vehicle_year,
+      vehicle_value: body.vehicle_value,
+      down_payment_amount: body.down_payment_amount,
+      insurance_amount: body.insurance_amount,
+      insurance_mode: body.insurance_mode,
+      monthly_payment: body.monthly_payment,
+      branch: body.branch,
+      collecting_advisor_name: body.collecting_advisor_name,
+      
       // Datos personales
       nationality: body.nationality,
       gender: body.gender,
       birth_date: body.birth_date,
+      birth_country: body.birth_country,
       marital_status: body.marital_status,
       curp: body.curp,
       rfc_with_homoclave: body.rfc_with_homoclave,
+      rfc_homoclave: body.rfc_homoclave,
       nss: body.nss,
       birth_state: body.birth_state,
       education_level: body.education_level,
+      electronic_signature_series: body.electronic_signature_series,
+      dependents_count: body.dependents_count,
+      emergency_phone: body.emergency_phone,
       
       // Dirección
       street_and_number: body.street_and_number,
@@ -67,10 +97,13 @@ export async function PUT(
       postal_code: body.postal_code,
       housing_type: body.housing_type,
       residence_years: body.residence_years,
+      country: body.country,
       
       // Información laboral
       company_name: body.company_name,
       job_position: body.job_position,
+      occupation: body.occupation,
+      immediate_supervisor: body.immediate_supervisor,
       job_seniority_years: body.job_seniority_years,
       job_seniority_months: body.job_seniority_months,
       monthly_income: body.monthly_income,
@@ -95,6 +128,15 @@ export async function PUT(
       reference_3_phone2: body.reference_3_phone2,
       reference_3_mobile: body.reference_3_mobile,
       
+      // Declaraciones PEP
+      is_pep: body.is_pep,
+      pep_position: body.pep_position,
+      pep_period: body.pep_period,
+      has_pep_relative: body.has_pep_relative,
+      pep_relative_name: body.pep_relative_name,
+      pep_relative_position: body.pep_relative_position,
+      pep_relative_relationship: body.pep_relative_relationship,
+      
       // Estado y metadatos
       status: body.status,
       updated_at: new Date().toISOString()
@@ -110,13 +152,27 @@ export async function PUT(
 
     console.log('🔧 [BACKUP] Clean fields count:', Object.keys(cleanFields).length)
     console.log('🔧 [BACKUP] Clean fields keys:', Object.keys(cleanFields))
-    console.log('🔧 [BACKUP] Clean fields sample:', {
+    console.log('🔧 [BACKUP] Vehicle fields in cleanFields:', {
+      vehicle_brand: cleanFields.vehicle_brand,
+      vehicle_model: cleanFields.vehicle_model,
+      vehicle_year: cleanFields.vehicle_year,
+      vehicle_value: cleanFields.vehicle_value,
+      monthly_payment: cleanFields.monthly_payment,
+      down_payment_amount: cleanFields.down_payment_amount,
+      insurance_amount: cleanFields.insurance_amount,
+      insurance_mode: cleanFields.insurance_mode
+    })
+    console.log('🔧 [BACKUP] Personal fields in cleanFields:', {
       product_type: cleanFields.product_type,
       requested_amount: cleanFields.requested_amount,
       payment_frequency: cleanFields.payment_frequency,
       resource_usage: cleanFields.resource_usage,
       first_names: cleanFields.first_names,
-      nationality: cleanFields.nationality
+      nationality: cleanFields.nationality,
+      is_pep: cleanFields.is_pep,
+      pep_position: cleanFields.pep_position,
+      has_pep_relative: cleanFields.has_pep_relative,
+      pep_relative_name: cleanFields.pep_relative_name
     })
 
     // Actualización simple
@@ -155,10 +211,10 @@ export async function PUT(
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const { id } = params
+    const { id } = await params
 
     if (!id) {
       return NextResponse.json(
@@ -169,7 +225,28 @@ export async function GET(
 
     const { data: application, error } = await supabaseClient
       .from('z_auto_credit_applications')
-      .select('*')
+      .select(`
+        *,
+        z_auto_quotes!quote_id (
+          id,
+          client_name,
+          client_email,
+          client_phone,
+          vehicle_brand,
+          vehicle_model,
+          vehicle_year,
+          vehicle_value,
+          insurance_mode,
+          insurance_amount
+        ),
+        z_auto_simulations!simulation_id (
+          id,
+          tier_code,
+          term_months,
+          monthly_payment,
+          total_to_finance
+        )
+      `)
       .eq('id', id)
       .single()
 

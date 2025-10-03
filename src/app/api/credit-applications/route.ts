@@ -42,6 +42,10 @@ export async function POST(request: NextRequest) {
       payment_frequency,
       resource_usage,
       
+      // Información adicional
+      branch_office,
+      collecting_advisor_name,
+      
       // B) Datos del solicitante - Identidad
       paternal_surname,
       maternal_surname,
@@ -49,18 +53,23 @@ export async function POST(request: NextRequest) {
       marital_status,
       curp,
       rfc_with_homoclave,
+      rfc_homoclave,
       nss,
       birth_date,
+      birth_country,
       gender,
       nationality,
       birth_state,
       education_level,
+      electronic_signature_series,
+      dependents_count,
       
       // B) Contacto
       personal_email,
       work_email,
       mobile_phone,
       landline_phone,
+      emergency_phone,
       
       // B) Domicilio
       street_and_number,
@@ -72,10 +81,13 @@ export async function POST(request: NextRequest) {
       postal_code,
       housing_type,
       residence_years,
+      country,
       
       // C) Empleo e ingresos
       company_name,
       job_position,
+      occupation,
+      immediate_supervisor,
       job_seniority_years,
       job_seniority_months,
       monthly_income,
@@ -122,7 +134,6 @@ export async function POST(request: NextRequest) {
       sic_authorization = false,
       sic_authorization_date,
       sic_authorization_place,
-      collecting_advisor_name,
       
       // H) Aviso de Privacidad
       privacy_notice_accepted = false,
@@ -134,7 +145,6 @@ export async function POST(request: NextRequest) {
       // J) Uso interno
       internal_folio,
       executive_name,
-      branch_office,
       
       // Checklist
       has_ine = false,
@@ -212,24 +222,31 @@ export async function POST(request: NextRequest) {
       product_type,
       requested_amount,
       term_months,
-      payment_frequency,
+      payment_frequency: payment_frequency || 'mensual',
       resource_usage,
+      branch_office,
+      collecting_advisor_name,
       paternal_surname,
       maternal_surname,
       first_names,
       marital_status,
       curp,
       rfc_with_homoclave,
+      rfc_homoclave,
       nss,
       birth_date,
+      birth_country,
       gender,
       nationality,
       birth_state,
       education_level,
+      electronic_signature_series,
+      dependents_count,
       personal_email,
       work_email,
       mobile_phone,
       landline_phone,
+      emergency_phone,
       street_and_number,
       interior_number,
       between_streets,
@@ -239,8 +256,11 @@ export async function POST(request: NextRequest) {
       postal_code,
       housing_type,
       residence_years,
+      country,
       company_name,
       job_position,
+      occupation,
+      immediate_supervisor,
       job_seniority_years,
       job_seniority_months,
       monthly_income,
@@ -277,7 +297,6 @@ export async function POST(request: NextRequest) {
       sic_authorization,
       sic_authorization_date,
       sic_authorization_place,
-      collecting_advisor_name,
       privacy_notice_accepted,
       privacy_notice_date,
       marketing_consent,
@@ -344,6 +363,8 @@ export async function GET(request: NextRequest) {
     // Parámetros de filtrado
     const status = searchParams.get('status')
     const created_by = searchParams.get('created_by')
+    const guest_session_id = searchParams.get('guest_session_id')
+    const session_token = searchParams.get('session_token')
     const quote_id = searchParams.get('quote_id')
     const folio_number = searchParams.get('folio_number')
     const limit = parseInt(searchParams.get('limit') || '50')
@@ -378,9 +399,21 @@ export async function GET(request: NextRequest) {
     if (status) {
       query = query.eq('status', status)
     }
+    
+    // Buscar por usuario O por sesión de invitado
     if (created_by) {
-      query = query.eq('created_by_user_id', created_by)
+      if (guest_session_id) {
+        // Buscar por usuario O sesión de invitado
+        query = query.or(`created_by_user_id.eq.${created_by},guest_session_id.eq.${guest_session_id}`)
+      } else {
+        query = query.eq('created_by_user_id', created_by)
+      }
+    } else if (guest_session_id) {
+      query = query.eq('guest_session_id', guest_session_id)
+    } else if (session_token) {
+      query = query.eq('session_token', session_token)
     }
+    
     if (quote_id) {
       query = query.eq('quote_id', quote_id)
     }
